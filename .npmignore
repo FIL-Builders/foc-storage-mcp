@@ -1,0 +1,35 @@
+# Source files - we ship the compiled dist/ directory
+src/
+*.ts
+!*.d.ts
+tsconfig.json
+tsup.config.ts
+
+# Development files
+node_modules/
+.env
+.env.*
+*.log
+pnpm-lock.yaml
+
+# Development and testing
+.mastra/
+tests/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Git and IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code configuration (local development only)
+.claude/
+.mcp.json
+
+# Build artifacts we don't need
+*.tsbuildinfo

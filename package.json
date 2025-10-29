@@ -1,0 +1,66 @@
+{
+  "name": "@fil-b/foc-storage-mcp",
+  "version": "0.1.0",
+  "main": "dist/mcp-server.js",
+  "bin": {
+    "foc-storage-mcp": "./dist/mcp-server.js"
+  },
+  "scripts": {
+    "dev": "mastra dev",
+    "build": "mastra build",
+    "start": "mastra start",
+    "mcp": "tsx src/mcp-server.ts",
+    "start:mcp": "tsx src/mcp-server.ts",
+    "build:mcp": "tsup"
+  },
+  "keywords": [
+    "filecoin",
+    "synapse-sdk",
+    "filecoin onchain cloud",
+    "decentralized",
+    "storage",
+    "mastra",
+    "mcp"
+  ],
+  "author": "@nijoe1",
+  "license": "MIT",
+  "description": "MCP server for decentralized file storage on Filecoin onchain cloud via SynapseSDK",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FIL-Builders/foc-storage-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/FIL-Builders/foc-storage-mcp/issues"
+  },
+  "homepage": "https://github.com/FIL-Builders/foc-storage-mcp#readme",
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.57",
+    "@filoz/synapse-sdk": "^0.34.0",
+    "@mastra/core": "latest",
+    "@mastra/libsql": "latest",
+    "@mastra/loggers": "latest",
+    "@mastra/mcp": "latest",
+    "@mastra/memory": "latest",
+    "ai": "^5.0.82",
+    "axios": "^1.10.0",
+    "axios-retry": "^4.5.0",
+    "decimal.js": "^10.6.0",
+    "ethers": "^6.13.0",
+    "mastra": "latest",
+    "tsup": "^8.5.0",
+    "viem": "^2.21.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.4",
+    "dotenv": "^17.2.3",
+    "jest": "^30.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}
