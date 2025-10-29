@@ -93,7 +93,9 @@ export const getDatasets = async (withCDN: boolean = false, includeAll: boolean 
                         if (dataset.withCDN) {
                             return `https://${userAddress}.calibration.filbeam.io/${pieceCid}`;
                         } else {
-                            return `${serviceURL}/piece/${pieceCid}`;
+                            const endsWithSlash = serviceURL.endsWith('/');
+                            const serviceURLWithoutSlash = endsWithSlash ? serviceURL.slice(0, -1) : serviceURL;
+                            return `${serviceURLWithoutSlash}/piece/${pieceCid}`;
                         }
                     };
 

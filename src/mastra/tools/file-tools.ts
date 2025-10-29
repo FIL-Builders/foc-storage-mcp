@@ -133,7 +133,10 @@ export const uploadFile = createTool({
         if (context.withCDN) {
           return `https://${(await synapse.getSigner().getAddress())}.calibration.filbeam.io/${pieceCid}`;
         } else {
-          return `${(await storageService.getProviderInfo()).products.PDP?.data.serviceURL || ""}/piece/${pieceCid}`;
+          const serviceURL = (await storageService.getProviderInfo()).products.PDP?.data.serviceURL || "";
+          const endsWithSlash = serviceURL.endsWith('/');
+          const serviceURLWithoutSlash = endsWithSlash ? serviceURL.slice(0, -1) : serviceURL;
+          return `${serviceURLWithoutSlash}/piece/${pieceCid}`;
         }
       };
 

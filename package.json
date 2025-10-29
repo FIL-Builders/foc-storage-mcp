@@ -1,6 +1,6 @@
 {
   "name": "@fil-b/foc-storage-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "dist/mcp-server.js",
   "bin": {
     "foc-storage-mcp": "./dist/mcp-server.js"

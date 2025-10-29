@@ -38,7 +38,7 @@ Add the following configuration to your MCP client:
   "mcpServers": {
     "foc-storage": {
       "command": "npx",
-      "args": ["@fil-b/foc-storage-mcp"],
+      "args": ["-y", "@fil-b/foc-storage-mcp"],
       "env": {
         "PRIVATE_KEY": "your_private_key_here"
       }
