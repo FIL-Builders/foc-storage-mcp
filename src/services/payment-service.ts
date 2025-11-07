@@ -1,52 +1,71 @@
 /**
  * Shared payment service for FOC storage operations
- * Centralizes payment and approval logic to avoid duplication
  */
 
-import { Synapse, TIME_CONSTANTS } from '@filoz/synapse-sdk';
-import { MAX_UINT256 } from '@/config';
-
+import { client } from './viem';
+import * as Payments from '@filoz/synapse-core/pay';
+import { waitForTransactionReceipt } from 'viem/actions';
+import { synapseErrorHandler } from '../lib/errors';
 export interface PaymentResult {
-  txHash: string;
+  txHash: string | null;
   success: boolean;
+  error?: string;
+}
+export interface WithdrawalResult {
+  txHash: string | null;
+  success: boolean;
+  error?: string;
+}
+/**
+ * Processes storage payment with EIP-2612 permit and operator approval
+ * @param depositAmount Amount to deposit in base units (wei)
+ * @returns Transaction result with hash and success status
+ */
+export async function processPaymentService(
+  depositAmount: bigint,
+): Promise<PaymentResult> {
+
+  try {
+    // Process payment with EIP-2612 permit (single transaction)
+    const hash = await Payments.depositAndApprove(client, {
+      amount: BigInt(depositAmount),
+    });
+
+    const receipt = await waitForTransactionReceipt(client, {
+      hash,
+    });
+
+    return { txHash: hash, success: receipt.status === "success" };
+  } catch (error: any) {
+    return {
+      txHash: null,
+      success: false,
+      error: synapseErrorHandler(error)
+    };
+  }
 }
 
 /**
- * Processes storage payment with EIP-2612 permit and operator approval
- * Handles both deposit (when amount > 0) and approval-only scenarios
- *
- * @param synapse - Initialized Synapse SDK instance
- * @param depositAmount - Amount to deposit in base units (attoFIL), 0 for approval-only
- * @param persistenceDays - Number of days to persist storage
- * @returns Transaction hash and success status
- * @throws If wallet balance insufficient or transaction fails
+ * Processes withdrawal from storage account
+ * @param withdrawalAmount Amount to withdraw in base units (wei)
+ * @returns Transaction result with hash and success status
  */
-export async function processStoragePayment(
-  synapse: Synapse,
-  depositAmount: bigint,
-  persistenceDays: number
-): Promise<PaymentResult> {
-  const warmStorageAddress = synapse.getWarmStorageAddress();
-  const epochs = TIME_CONSTANTS.EPOCHS_PER_DAY * BigInt(persistenceDays);
-
-  if (depositAmount > 0n) {
-    const tx = await synapse.payments.depositWithPermitAndApproveOperator(
-      depositAmount,
-      warmStorageAddress,
-      MAX_UINT256,
-      MAX_UINT256,
-      epochs
-    );
-    const receipt = await tx.wait(1);
-    return { txHash: receipt?.hash || tx.hash, success: true };
-  } else {
-    const tx = await synapse.payments.approveService(
-      warmStorageAddress,
-      MAX_UINT256,
-      MAX_UINT256,
-      epochs
-    );
-    const receipt = await tx.wait(1);
-    return { txHash: receipt?.hash || tx.hash, success: true };
+export async function processWithdrawalService(
+  withdrawalAmount: bigint,
+): Promise<WithdrawalResult> {
+  try {
+    const hash = await Payments.withdraw(client, {
+      amount: BigInt(withdrawalAmount),
+    });
+    const receipt = await waitForTransactionReceipt(client, {
+      hash,
+    });
+    return { txHash: hash, success: receipt.status === "success" };
+  } catch (error: any) {
+    return {
+      txHash: null,
+      success: false,
+      error: synapseErrorHandler(error)
+    };
   }
 }

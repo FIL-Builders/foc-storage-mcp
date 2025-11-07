@@ -12,3 +12,5 @@ export * from './calculations';
 export * from './synapse';
 
 export * from './utils';
+
+export * from './errors';

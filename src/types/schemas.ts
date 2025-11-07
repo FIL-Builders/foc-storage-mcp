@@ -5,12 +5,13 @@
 
 import { z } from 'zod';
 import { env } from '@/config';
-import { SIZE_CONSTANTS } from '@filoz/synapse-sdk';
-
+import { SIZE_CONSTANTS } from '@filoz/synapse-core/utils';
+import { DataSetWithPieces } from '@filoz/synapse-react';
+import { PDPProvider } from '@filoz/synapse-core/warm-storage';
 // Dataset tools schemas
 export const GetDatasetsSchema = z.object({
-  includeAllDatasets: z.boolean().optional()
-    .describe('Include all datasets. Default: false'),
+  includeAllDatasets: z.boolean().optional().default(true)
+    .describe('Include all datasets. Default: true'),
   filterByCDN: z.boolean().optional()
     .describe('Filter to only CDN-enabled datasets. Default: false. If includeAllDatasets is true, this will be ignored')
 });
@@ -68,6 +69,11 @@ export const ProcessPaymentSchema = z.object({
     .describe('Amount to deposit in USDFC. Default: 0. If not provided, the tool will check the balance and deposit the necessary amount.')
 });
 
+export const ProcessWithdrawalSchema = z.object({
+  withdrawalAmount: z.number().optional().default(0)
+    .describe('Amount to withdraw in USDFC. Default: 0. If not provided, the tool will check the balance and withdraw the necessary amount.')
+});
+
 // Provider query schema
 export const GetProvidersSchema = z.object({
   onlyApproved: z.boolean().optional().default(true)
@@ -113,7 +119,26 @@ export const DataSetSchema = z.object({
   dataSetPieces: z.array(DataSetPieceSchema),
 });
 
-export const FormattedStorageBalanceResultSchema = z.object({
+export const StorageBalanceResultSchema = z.object({
+  filBalance: z.bigint(),
+  usdfcBalance: z.bigint(),
+  availableStorageFundsUsdfc: z.bigint(),
+  depositNeeded: z.bigint(),
+  availableToFreeUp: z.bigint(),
+  daysLeftAtMaxBurnRate: z.number(),
+  daysLeftAtBurnRate: z.number(),
+  isRateSufficient: z.boolean(),
+  isLockupSufficient: z.boolean(),
+  isSufficient: z.boolean(),
+  currentStorageMonthlyRate: z.bigint(),
+  maxStorageMonthlyRate: z.bigint(),
+});
+
+// Serialized version with string values for JSON output
+export const StorageBalanceResultSerializedSchema = z.object({
+  filBalance: z.string(),
+  usdfcBalance: z.string(),
+  availableStorageFundsUsdfc: z.string(),
   depositNeeded: z.string(),
   availableToFreeUp: z.string(),
   daysLeftAtMaxBurnRate: z.number(),
@@ -121,9 +146,23 @@ export const FormattedStorageBalanceResultSchema = z.object({
   isRateSufficient: z.boolean(),
   isLockupSufficient: z.boolean(),
   isSufficient: z.boolean(),
-  availableFunds: z.string(),
-  currentMonthlyRate: z.string(),
-  maxMonthlyRate: z.string(),
+  currentStorageMonthlyRate: z.string(),
+  maxStorageMonthlyRate: z.string(),
+});
+
+export const FormattedStorageBalanceResultSchema = z.object({
+  filBalance: z.string(),
+  usdfcBalance: z.string(),
+  availableStorageFundsUsdfc: z.string(),
+  currentStorageMonthlyRate: z.string(),
+  maxStorageMonthlyRate: z.string(),
+  daysLeftAtMaxBurnRate: z.string(),
+  daysLeftAtBurnRate: z.string(),
+  depositNeeded: z.string(),
+  availableToFreeUp: z.string(),
+  isRateSufficient: z.boolean(),
+  isLockupSufficient: z.boolean(),
+  isSufficient: z.boolean(),
 });
 
 // Provider tool output schemas
@@ -132,7 +171,7 @@ export const FormattedStorageBalanceResultSchema = z.object({
 export const GetProvidersOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  providers: z.array(z.any()).optional(),
+  providers: z.array(z.custom<PDPProvider>()),
   count: z.number().optional(),
   // Error fields  
   error: z.string().optional(),
@@ -168,6 +207,18 @@ export const ProcessPaymentOutputSchema = z.object({
     deposit: z.number(),
   }).optional(),
   available: z.number().optional(),
+  progressLog: z.array(z.string()).optional(),
+  // Error fields
+  error: z.string().optional(),
+});
+
+// Payment tool output schemas
+// MCP requires output schema to be a plain object (not union/oneOf)
+export const ProcessWithdrawalOutputSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  txHash: z.string().nullable().optional(),
+  progressLog: z.array(z.string()).optional(),
   // Error fields
   error: z.string().optional(),
 });
@@ -177,8 +228,9 @@ export const ProcessPaymentOutputSchema = z.object({
 export const GetBalancesOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  checkStorageBalanceResultFormatted: z.any().optional(),
-  checkStorageBalanceResult: z.any().optional(),
+  checkStorageBalanceResultFormatted: FormattedStorageBalanceResultSchema.optional(),
+  checkStorageBalanceResult: StorageBalanceResultSerializedSchema.optional(),
+  progressLog: z.array(z.string()).optional(),
   // Error fields
   error: z.string().optional(),
   message: z.string().optional(),
@@ -189,8 +241,9 @@ export const GetBalancesOutputSchema = z.object({
 export const GetDatasetsOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  datasets: z.array(DataSetSchema).optional(),
+  datasets: z.array(z.custom<DataSetWithPieces>()).optional(),
   count: z.number().optional(),
+  progressLog: z.array(z.string()).optional(),
   // Error fields
   error: z.string().optional(),
   // Common field
@@ -200,7 +253,7 @@ export const GetDatasetsOutputSchema = z.object({
 export const GetDatasetOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  dataset: DataSetSchema,
+  dataset: z.custom<DataSetWithPieces>().optional(),
   // Error fields
   error: z.string().optional(),
   // Common field
@@ -211,10 +264,11 @@ export const GetDatasetOutputSchema = z.object({
 export const CreateDatasetOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  datasetId: z.string().optional(),
-  txHash: z.string().optional(),
+  datasetId: z.string().nullable().optional(),
+  txHash: z.string().nullable().optional(),
+  progressLog: z.array(z.string()).optional(),
   // Error fields
-  error: z.string().optional(),
+  error: z.string().nullable().optional(),
   // Common field
   message: z.string(),
 });

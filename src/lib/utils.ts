@@ -1,4 +1,6 @@
 import { promises as fs } from "fs";
+import { env } from "@/config";
+
 /**
  * Validates file path exists and returns file info
  */
@@ -71,4 +73,30 @@ export function serializeBigInt<T>(obj: T): T {
         ) as unknown as T;
     }
     return obj;
-}       
+}
+
+/**
+ * Generates a block explorer URL for a transaction hash based on the current network
+ * @param txHash - Transaction hash (with or without 0x prefix)
+ * @returns Block explorer URL for the transaction
+ */
+export function getExplorerUrl(txHash: string): string {
+    const isMainnet = env.FILECOIN_NETWORK === 'mainnet';
+    const baseUrl = isMainnet
+        ? 'https://filecoin.blockscout.com/tx'
+        : 'https://filecoin-testnet.blockscout.com/tx';
+
+    return `${baseUrl}/${txHash}`;
+}
+
+/**
+ * Formats transaction hash with explorer link for console logging
+ * @param txHash - Transaction hash
+ * @returns Formatted string with hash and explorer link
+ */
+export function formatTxWithExplorer(txHash: string | null): string {
+    if (!txHash) return 'No transaction hash available';
+
+    const explorerUrl = getExplorerUrl(txHash);
+    return `Transaction: ${txHash}\nView on explorer: ${explorerUrl}`;
+}

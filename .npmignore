@@ -30,6 +30,7 @@ coverage/
 # Claude Code configuration (local development only)
 .claude/
 .mcp.json
+/claude-code-storage
 
 # Build artifacts we don't need
 *.tsbuildinfo

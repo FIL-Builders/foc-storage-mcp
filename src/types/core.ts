@@ -3,15 +3,6 @@
  * SDK types, interfaces, and data models
  */
 
-import {
-  TIME_CONSTANTS,
-  SIZE_CONSTANTS,
-  TOKENS,
-} from '@filoz/synapse-sdk';
-
-// Re-export SDK constants for convenience
-export { TIME_CONSTANTS, SIZE_CONSTANTS, TOKENS };
-
 
 /**
  * Unified size interface that consolidates storage size calculations

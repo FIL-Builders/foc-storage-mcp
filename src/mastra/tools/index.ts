@@ -9,6 +9,7 @@ import { fileTools } from '@/mastra/tools/file-tools';
 import { balanceTools } from '@/mastra/tools/balance-tools';
 import { paymentTools } from '@/mastra/tools/payment-tools';
 import { providerTools } from '@/mastra/tools/provider-tools';
+import { storageCostTools } from '@/mastra/tools/storage-cost-tools';
 
 export const focStorageTools = {
   ...datasetTools,
@@ -16,6 +17,7 @@ export const focStorageTools = {
   ...balanceTools,
   ...paymentTools,
   ...providerTools,
+  ...storageCostTools,
 };
 
 // Tools array for Mastra Agent

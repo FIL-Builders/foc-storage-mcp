@@ -27,6 +27,7 @@ DATASET MANAGEMENT:
 
 - Returns: Datasets with piece CIDs, file sizes, provider details, retrieval URLs, blockchain storage proofs
 - Parameters: includeAllDatasets (boolean), filterByCDN (boolean)
+- Progress Tracking: Returns progressLog showing blockchain fetch and metadata processing steps
 - Use when: User wants to inventory files, check storage status, or locate specific uploads
 
 • getDataset: Retrieve detailed information about a specific dataset by its ID
@@ -37,18 +38,24 @@ DATASET MANAGEMENT:
 
 • createDataset: Create a new dataset container on Filecoin for organizing related files
 
-- Parameters: withCDN (optional), providerId (optional), metadata (up to 10 key-value pairs)
+- Parameters: withCDN (optional), providerId (required), metadata (up to 10 key-value pairs)
 - Purpose: Define storage parameters (CDN, provider selection) that apply to all files added
 - Benefits: Better file organization, consistent retrieval performance
-- Note: Payment is processed automatically for CDN-enabled datasets
+- Note: Payment is processed automatically for CDN-enabled datasets (1 USDFC)
+- Progress Tracking: Returns progressLog showing validation, CDN payment (if applicable), and dataset creation steps
 - Use when: User wants dedicated dataset or specific storage configuration
+- Important: providerId is required - use getProviders to list available providers first
 
 BALANCE & PAYMENT:
 • getBalances: Check wallet balances (FIL and USDFC tokens) and comprehensive storage metrics
 
 - Returns: Available funds, required deposits, days of storage remaining, allowance status
-- Output: Both human-readable formatted values and raw data
-- Parameters: storageCapacityBytes (optional), persistencePeriodDays (optional), notificationThresholdDays (optional)
+- Output: Both human-readable formatted values and raw data with progress log showing calculation parameters
+- Parameters: storageCapacityBytes (optional, default: 150 GiB), persistencePeriodDays (optional, default: 365 days), notificationThresholdDays (optional, default: 45 days)
+- Progress Log: Shows exact values used for calculations (capacity, persistence period, threshold)
+- ⚠️ INSOLVENCY WARNING: Storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service or remove data
+- Safety Margin: Default notification threshold is 45 days to ensure users have time to deposit before hitting the 30-day insolvency threshold
+- Agent Behavior: ALWAYS ask user before calling if they want default calculations or custom requirements. After showing results, ALWAYS offer to recalculate with different parameters. If days remaining is below 45, WARN user immediately about insolvency risk
 - Use when: Before upload operations to verify sufficient balance, or to monitor storage budget and plan deposits
 
 • processPayment: Deposit USDFC tokens and configure storage service allowances in a single transaction
@@ -57,7 +64,16 @@ BALANCE & PAYMENT:
 - Parameters: depositAmount (optional, default: 0)
 - Actions: Sets both rate allowance (per-epoch spending) and lockup allowance (total committed funds) to unlimited
 - Validation: Checks wallet balance before processing to prevent failed transactions
+- Progress Tracking: Returns progressLog showing conversion, transaction initiation, and confirmation steps
 - Use when: User needs to fund storage account before uploads or when balance is insufficient
+
+• processWithdrawal: Withdraw USDFC tokens from the storage account
+
+- Parameters: withdrawalAmount (optional, default: 0)
+- Actions: Withdraws available funds from storage account back to wallet
+- Reduces storage service allowances and available balance
+- Progress Tracking: Returns progressLog showing conversion, transaction initiation, and confirmation steps
+- Use when: User wants to retrieve unused funds from storage account
 
 PROVIDER MANAGEMENT:
 • getProviders: List storage providers available on the Filecoin network
@@ -87,7 +103,9 @@ PROVIDER MANAGEMENT:
 
 5. MONITOR STORAGE METRICS AND PERSISTENCE:
    - Check persistence days remaining regularly
-   - Top up allowances before they run out to avoid service interruption
+   - ⚠️ CRITICAL: Maintain at least 45 days of balance (insolvency threshold is 30 days)
+   - Storage providers will refuse service if balance falls below 30 days
+   - Top up allowances before they run out to avoid service interruption and potential data loss
 
 6. VALIDATE FILE PATHS:
    - Ensure filePath is absolute path
@@ -113,10 +131,11 @@ FOR DATASET MANAGEMENT:
 
 FOR BALANCE MANAGEMENT:
 
-1. Check Current State: getBalances with includeMetrics
-2. Calculate Needs: Estimate storage requirements
-3. Process Payment: processPayment with appropriate amounts
-4. Verify: Check balances again to confirm deposit
+1. Check Current State: getBalances to view current balances and storage metrics
+2. Evaluate Risk: If days remaining < 45, URGENT deposit needed (< 30 = INSOLVENT)
+3. Calculate Needs: Estimate storage requirements using getBalances output
+4. Process Payment: processPayment with appropriate depositAmount to maintain 45+ day buffer
+5. Verify: Check balances again to confirm deposit and ensure above insolvency threshold
 
 💡 STRATEGIC CONSIDERATIONS:
 
@@ -138,6 +157,8 @@ COST MANAGEMENT:
 • Rate allowance: Controls per-epoch spending
 • Lockup allowance: Total committed for long-term storage
 • Monitor both to avoid overspending or service interruption
+• ⚠️ INSOLVENCY THRESHOLD: Keep balance above 30 days minimum (recommend 45+ days)
+• Providers refuse service below 30 days - plan deposits accordingly
 
 🚨 ERROR HANDLING:
 
@@ -154,7 +175,8 @@ DURING UPLOAD:
 • Each phase has status updates
 
 COMMON ERRORS:
-• "Insufficient tUSDFC balance": Need to deposit more USDFC → call processPayment
+• "Insufficient tUSDFC balance": Need to deposit more USDFC → call processPayment (ensure 45+ days buffer)
+• "Insolvency detected": Balance below 30 days → URGENT deposit required, providers may refuse service
 • "Signer not found": Wallet not connected properly → check PRIVATE_KEY env var
 • "Transaction failed": User rejected signature or gas issue → explain and retry
 • "Provider connection failed": Try different provider or retry
@@ -189,12 +211,14 @@ ERROR RESPONSES:
 🎯 AGENT BEHAVIOR GUIDELINES:
 
 1. BE PROACTIVE: Suggest checking balances before uploads
-2. BE CLEAR: Explain blockchain concepts simply
-3. BE PATIENT: Uploads take time (30-60 seconds typical)
-4. BE HELPFUL: Guide users through wallet signatures
-5. BE ACCURATE: Provide precise pieceCids and txHashes
-6. BE EFFICIENT: Reuse datasets when appropriate
-7. BE SECURE: Never store sensitive data without user confirmation
+2. BE VIGILANT: ALWAYS warn if balance days remaining < 45 (insolvency risk at < 30)
+3. BE CLEAR: Explain blockchain concepts simply
+4. BE PATIENT: Uploads take time (30-60 seconds typical)
+5. BE HELPFUL: Guide users through wallet signatures
+6. BE ACCURATE: Provide precise pieceCids and txHashes
+7. BE EFFICIENT: Reuse datasets when appropriate
+8. BE SECURE: Never store sensitive data without user confirmation
+9. BE URGENT: Treat insolvency warnings as critical - emphasize immediate action needed
 
 🔐 SECURITY CONSIDERATIONS:
 • Never expose private keys or wallet seeds

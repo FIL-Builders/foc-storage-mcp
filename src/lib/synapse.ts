@@ -1,4 +1,4 @@
-import { Synapse, SynapseOptions } from "@filoz/synapse-sdk";
+import { Synapse } from "@filoz/synapse-sdk";
 import { env, NETWORK_CONFIGS } from "../config";
 
 export const getSynapseInstance = async () => {
@@ -6,7 +6,7 @@ export const getSynapseInstance = async () => {
     const synapse = await Synapse.create(
         {
             privateKey: env.PRIVATE_KEY,
-            rpcURL: NETWORK_CONFIGS[network].rpcUrl,
+            rpcURL: NETWORK_CONFIGS[network].rpcUrl[0],
         }
     );
     return synapse;

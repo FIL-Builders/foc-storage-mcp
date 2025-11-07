@@ -3,9 +3,6 @@
  * Business logic layer for storage operations
  */
 
-// Wallet service
-export * from './wallet-service';
-
 // Payment service
 export * from './payment-service';
 
@@ -14,3 +11,6 @@ export * from './dataset-service';
 
 // Storage balance service
 export * from './storage-service';
+
+// Provider service
+export * from './provider-service';

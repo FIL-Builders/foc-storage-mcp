@@ -1,12 +1,12 @@
 import { createTool } from "@mastra/core";
 import { GetProvidersOutputSchema, GetProvidersSchema } from "@/types";
-import { getSynapseInstance, serializeBigInt, createErrorResponse } from "@/lib";
-import { WarmStorageService, ProviderInfo } from "@filoz/synapse-sdk";
+import { serializeBigInt } from "@/lib";
+import { publicClient } from "@/services/viem";
+import { readProviders } from "@filoz/synapse-core/warm-storage";
 
 /**
  * Provider tools for FOC storage operations.
  */
-
 export const getProviders = createTool({
   id: "getProviders",
   description:
@@ -15,31 +15,12 @@ export const getProviders = createTool({
   outputSchema: GetProvidersOutputSchema,
   execute: async ({ context }) => {
     try {
-      const synapse = await getSynapseInstance();
-
-      // Fetch all providers
-      const warmStorageService = await WarmStorageService.create(
-        synapse.getProvider(),
-        synapse.getWarmStorageAddress()
+      // Fetch all providers using publicClient (respects env.FILECOIN_NETWORK)
+      const providers = (await readProviders(
+        publicClient,
+      )).filter((p) =>
+        context.onlyApproved ? p.isActive : true
       );
-      const approvedProviderIds =
-        await warmStorageService.getApprovedProviderIds();
-
-      // Fetch provider info
-      const providersInfo = await Promise.all(
-        approvedProviderIds.map(async (providerId: number) => {
-          const providerInfo = await synapse.getProviderInfo(providerId);
-          return providerInfo;
-        })
-      );
-
-      // Filter to approved providers if requested
-      const providers =
-        context.onlyApproved !== false
-          ? providersInfo.filter((p: ProviderInfo) =>
-            approvedProviderIds.includes(p.id)
-          )
-          : providersInfo;
 
       return {
         success: true,
@@ -48,10 +29,12 @@ export const getProviders = createTool({
         message: `Found ${providers.length} provider(s)`,
       };
     } catch (error) {
-      return createErrorResponse(
-        "provider_fetch_failed",
-        `Failed to fetch providers: ${(error as Error).message}`
-      ) as any;
+      return {
+        success: false,
+        providers: [],
+        error: (error as Error).message,
+        message: `Failed to fetch providers: ${(error as Error).message}`,
+      };
     }
   },
 });

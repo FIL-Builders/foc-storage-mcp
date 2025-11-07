@@ -6,16 +6,18 @@ import {
   CreateDatasetOutputSchema,
   GetDatasetSchema,
   GetDatasetOutputSchema,
-  SIZE_CONSTANTS,
 } from "@/types";
-import { getSynapseInstance, createErrorResponse, serializeBigInt } from "@/lib";
-import { getDatasets as getDatasetsUtils, processStoragePayment } from "@/services";
+import { createErrorResponse, serializeBigInt, getExplorerUrl } from "@/lib";
+
 import { env } from "@/config";
+
+import { getDatasetsService, getDataSetService, createDataSetService } from "@/services/dataset-service";
+import { getProvider as getProviderService } from "@/services";
+import { processPaymentService } from "@/services/payment-service";
 
 /**
  * Dataset tools for FOC storage operations.
  */
-
 export const getDatasets = createTool({
   id: "getDatasets",
   description:
@@ -23,9 +25,36 @@ export const getDatasets = createTool({
   inputSchema: GetDatasetsSchema,
   outputSchema: GetDatasetsOutputSchema,
   execute: async ({ context }) => {
-    const withCDN = context.filterByCDN ?? false;
-    const includeAll = context.includeAllDatasets ?? false;
-    return await getDatasetsUtils(withCDN, includeAll);
+    const progressLog: string[] = [];
+    const log = (msg: string) => { progressLog.push(msg); };
+
+    try {
+      const withCDN = context.filterByCDN ?? false;
+      const includeAll = context.includeAllDatasets ?? false;
+
+      log("Fetching datasets from blockchain...");
+      const dataSets = await getDatasetsService(withCDN, includeAll);
+
+      if (dataSets.length > 0) {
+        log(`Retrieved ${dataSets.length} dataset(s)`);
+        log("Processing dataset metadata...");
+      }
+
+      return {
+        success: true,
+        datasets: dataSets.map((dataset) => serializeBigInt(dataset)),
+        count: dataSets.length,
+        message: `Found ${dataSets.length} dataset(s)`,
+        progressLog,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message,
+        message: `Failed to fetch datasets: ${(error as Error).message}`,
+        progressLog,
+      };
+    }
   },
 });
 
@@ -37,18 +66,18 @@ export const getDataset = createTool({
   outputSchema: GetDatasetOutputSchema,
   execute: async ({ context }) => {
     try {
-      const dataset = await getDatasetsUtils(undefined, undefined, Number(context.datasetId));
+      const dataset = await getDataSetService(Number(context.datasetId));
       return {
-        success: dataset.success,
-        dataset: serializeBigInt(dataset.datasets[0]),
-        message: dataset.message,
+        success: true,
+        dataset: serializeBigInt(dataset),
+        message: "Dataset fetched successfully",
       };
     } catch (error) {
       return createErrorResponse(
         "dataset_fetch_failed",
         `Failed to fetch dataset: ${(error as Error).message}`,
         { success: false }
-      ) as any;
+      );
     }
   },
 });
@@ -56,71 +85,66 @@ export const getDataset = createTool({
 export const createDataset = createTool({
   id: "createDataset",
   description:
-    "Create a new dataset container on Filecoin for organizing related files with consistent storage settings. Datasets define storage parameters (CDN enabled/disabled, provider selection) that apply to all files added to them. Creating datasets upfront allows for better file organization and consistent retrieval performance. Optionally specify a provider or let the system auto-select the optimal one. Note: Payment is processed automatically for CDN-enabled datasets.",
+    "Create a new dataset container on Filecoin for organizing related files with consistent storage settings. Datasets define storage parameters (CDN enabled/disabled, provider selection) that apply to all files added to them. Creating datasets upfront allows for better file organization and consistent retrieval performance. Provider ID is required - use getProviders to list available providers. Payment (1 USDFC) is processed automatically for CDN-enabled datasets. Returns dataset ID, transaction hash, and progress tracking through validation, payment, and creation steps.",
   inputSchema: CreateDatasetSchema,
   outputSchema: CreateDatasetOutputSchema,
   execute: async ({ context }) => {
-    try {
-      const synapse = await getSynapseInstance();
+    const progressLog: string[] = [];
+    const log = (msg: string) => { progressLog.push(msg); };
 
-      // const withCDN = context.withCDN ?? false;
-      const withCDN = true;
-
-      if (withCDN) {
-        // Process payment
-        const paymentResult = await processStoragePayment(synapse, BigInt(env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB)), env.PERSISTENCE_PERIOD_DAYS);
-        if (!paymentResult.success) {
-          return createErrorResponse(
-            "payment_failed",
-            `Failed to process payment: ${paymentResult.txHash ?? "Unknown error"}`,
-            { success: false }
-          ) as any;
-        }
-      }
-
-      let datasetId: string | undefined;
-      let txHash: string | undefined;
-
-      // Create storage with forceCreateDataSet
-      await synapse.createStorage({
-        providerId: context.providerId
-          ? parseInt(context.providerId)
-          : undefined,
-        forceCreateDataSet: true,
-        metadata: context.metadata,
-        callbacks: {
-          onDataSetCreationStarted: (txResponse) => {
-            txHash = txResponse.hash;
-            console.log(`[Dataset] Creation started (tx: ${txResponse.hash})`);
-          },
-          onDataSetCreationProgress: (status) => {
-            if (status.serverConfirmed) {
-              datasetId = status.dataSetId?.toString() || undefined;
-              console.log(`[Dataset] Ready (ID: ${status.dataSetId?.toString()})`);
-            }
-          },
-        },
-      });
-
+    if (!context.providerId) {
       return {
-        success: true as const,
-        datasetId,
-        txHash,
-        message: "Dataset created successfully",
+        success: false,
+        error: "provider_id_required",
+        message: "Provider ID is required. Use getProviders tool to list available providers and select one by ID.",
+        progressLog,
       };
-    } catch (error) {
-      return createErrorResponse(
-        "dataset_creation_failed",
-        `Failed to create dataset: ${(error as Error).message}`,
-        { success: false }
-      ) as any;
     }
+
+    log("Validating provider ID...");
+    const provider = await getProviderService(Number(context.providerId));
+    log(`Provider validated (ID: ${context.providerId})`);
+
+    const withCDN = context.withCDN ?? false;
+
+    if (withCDN) {
+      log("Processing CDN payment (1 USDFC)...");
+      const { success, error } = await processPaymentService(BigInt(env.CDN_DATASET_FEE));
+      if (!success) {
+        return {
+          success: false,
+          error: "payment_failed",
+          message: `Failed to process CDN payment (1 USDFC required): ${error}. Use processPayment tool to add funds first.`,
+          progressLog,
+        };
+      }
+      log("CDN payment processed successfully");
+    }
+
+    log("Creating dataset on blockchain...");
+    const result = await createDataSetService(provider, withCDN, context.metadata ?? {});
+
+    if (result.success) {
+      log("Dataset created successfully");
+      if (result.txHash) {
+        log(`View transaction: ${getExplorerUrl(result.txHash)}`);
+      }
+      return {
+        ...result,
+        progressLog,
+      };
+    }
+
+    return {
+      ...result,
+      progressLog,
+    };
   },
 });
 
-// Export all dataset tools
 export const datasetTools = {
   getDataset,
   getDatasets,
   createDataset,
 };
+

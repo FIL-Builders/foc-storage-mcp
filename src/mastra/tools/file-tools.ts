@@ -11,14 +11,15 @@ import {
   validateFilePath,
   createErrorResponse,
   fromBaseUnits,
+  getExplorerUrl,
 } from "@/lib";
 import { checkStorageBalance } from "@/services";
-import { processStoragePayment } from "@/services";
+import { processPaymentService } from "@/services/payment-service";
+import { getProvider } from "@/services";
 
 /**
  * File tools for FOC storage operations.
  */
-
 export const uploadFile = createTool({
   id: "uploadFile",
   description:
@@ -50,7 +51,6 @@ export const uploadFile = createTool({
       // PHASE 4: Balance check
       log("Checking storage balance...");
       const storageMetrics = await checkStorageBalance(
-        synapse,
         fileInfo.size,
         env.PERSISTENCE_PERIOD_DAYS
       );
@@ -62,32 +62,34 @@ export const uploadFile = createTool({
             success: false,
             error: "insufficient_balance",
             message:
-              "Insufficient balance. Enable autoPayment or call processPayment first",
-            required: {
-              deposit: fromBaseUnits(storageMetrics.depositNeeded, 18),
-            },
-          } as any;
+              `Insufficient balance: ${fromBaseUnits(storageMetrics.depositNeeded, 18)} USDFC required. Enable autoPayment parameter or use processPayment tool to deposit funds first.`,
+          };
         }
 
         log(storageMetrics.depositNeeded > 0n
           ? "Insufficient balance, processing payment..."
           : "Insufficient service approvals, approving service...");
+        log(`Deposit needed: ${fromBaseUnits(storageMetrics.depositNeeded, 18)} USDFC`);
 
-        await processStoragePayment(
-          synapse,
-          storageMetrics.depositNeeded,
-          env.PERSISTENCE_PERIOD_DAYS
-        );
+        if (storageMetrics.depositNeeded > 0n || !storageMetrics.isSufficient) {
 
-        log(storageMetrics.depositNeeded > 0n
-          ? "Payment processed successfully"
-          : "Service approved successfully");
+          const { success } = await processPaymentService(BigInt(storageMetrics.depositNeeded));
+          if (!success) {
+            return createErrorResponse(
+              "payment_failed",
+              "Failed to process payment",
+              { success: false }
+            );
+          }
+
+          log("Payment processed successfully");
+        }
       }
 
       // PHASE 6: Storage service creation
       log("Creating storage service...");
 
-      const storageService = await synapse.createStorage({
+      const storageService = await synapse.storage.createContext({
         dataSetId: context.datasetId ? Number(context.datasetId) : undefined,
         withCDN: context.withCDN || false,
         callbacks: {
@@ -95,15 +97,6 @@ export const uploadFile = createTool({
             log(`Dataset ${info.dataSetId} resolved`);
             log(`Dataset provider: ${Number(info.provider.id)}`);
             log(`Is existing dataset: ${info.isExisting}`);
-
-          },
-          onDataSetCreationStarted: (txResponse) => {
-            log(`Dataset creation started (tx: ${txResponse.hash})`);
-          },
-          onDataSetCreationProgress: (status) => {
-            if (status.serverConfirmed) {
-              log(`Dataset ready (ID: ${status.dataSetId})`);
-            }
           },
           onProviderSelected: (provider) => {
             log(`Provider selected: ${provider.id}`);
@@ -120,20 +113,23 @@ export const uploadFile = createTool({
         onUploadComplete: (piece) => {
           log(`Upload complete (pieceCid: ${piece.toV1().toString()})`);
         },
-        onPieceAdded: (txResponse) => {
-          uploadTxHash = txResponse?.hash;
-          log(`Piece added to dataset (tx: ${txResponse?.hash || "pending"})`);
+        onPieceAdded: (hash) => {
+          uploadTxHash = hash;
+          log(`Piece added to dataset (tx: ${hash || "pending"})`);
         },
         onPieceConfirmed: () => {
           log("Piece confirmed on blockchain");
         },
       });
 
+      const provider = await getProvider(storageService.provider.id);
+
       const getRetrievalUrl = async (pieceCid: string) => {
         if (context.withCDN) {
-          return `https://${(await synapse.getSigner().getAddress())}.calibration.filbeam.io/${pieceCid}`;
+          const network = env.FILECOIN_NETWORK === 'mainnet' ? 'mainnet' : 'calibration';
+          return `https://${(await synapse.getSigner().getAddress())}.${network}.filbeam.io/${pieceCid}`;
         } else {
-          const serviceURL = (await storageService.getProviderInfo()).products.PDP?.data.serviceURL || "";
+          const serviceURL = provider.pdp.serviceURL;
           const endsWithSlash = serviceURL.endsWith('/');
           const serviceURLWithoutSlash = endsWithSlash ? serviceURL.slice(0, -1) : serviceURL;
           return `${serviceURLWithoutSlash}/piece/${pieceCid}`;
@@ -146,6 +142,10 @@ export const uploadFile = createTool({
       console.log(`TX Hash: ${uploadTxHash}`);
       console.log(`File Name: ${fileName}`);
       console.log(`File Size: ${fileInfo.size}`);
+
+      if (uploadTxHash) {
+        log(`View transaction: ${getExplorerUrl(uploadTxHash)}`);
+      }
 
       return {
         success: true,

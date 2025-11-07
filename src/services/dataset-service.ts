@@ -1,189 +1,105 @@
-import { DataSetPieceData, EnhancedDataSetInfo, PDPServer, WarmStorageService } from "@filoz/synapse-sdk";
-import { DataSet, UnifiedSizeInfo } from "@/types";
-import { getPieceInfoFromCidBytes, sizeInfoMessage, serializeBigInt } from "@/lib";
-import { getSynapseInstance, createErrorResponse } from "@/lib";
+import { metadataArrayToObject } from "@filoz/synapse-core/utils";
+import { PDPProvider } from "@filoz/synapse-core/warm-storage";
+import { account, client, publicClient } from "./viem";
+import { createDataSet, getDataSet, getDataSets, getPieces, Piece } from "@filoz/synapse-core/warm-storage";
+import * as SP from "@filoz/synapse-core/sp";
+import { CONTRACTS } from "@/config";
+import { readContract } from 'viem/actions'
+import { synapseErrorHandler } from "@/lib/errors";
 
-export const getDatasets = async (withCDN: boolean = false, includeAll: boolean = false, onlyDatasetId: number | undefined = undefined) => {
-    try {
-        const synapse = await getSynapseInstance();
 
-        const warmStorageAddress = synapse.getWarmStorageAddress();
-
-        const warmStorageService = await WarmStorageService.create(synapse.getProvider(), warmStorageAddress);
-
-        // Fetch datasets from blockchain
-        const datasets = await synapse.storage.findDataSets();
-
-        if (datasets.length === 0) {
-            return {
-                success: true,
-                datasets: [],
-                count: 0,
-                message:
-                    "No datasets found. Upload files to create your first dataset.",
-            };
-        }
-
-        // Fetch provider info in parallel
-        const providers = await Promise.all(
-            datasets.map((dataset: any) =>
-                synapse.getProviderInfo(dataset.providerId).catch(() => null)
-            )
-        );
-
-        const userAddress = await synapse.getSigner().getAddress();
-
-        // Apply filters: onlyDatasetId takes priority, then includeAll or CDN filter
-        const filteredDatasets = datasets.filter((dataset: EnhancedDataSetInfo) => {
-            // If onlyDatasetId is specified, only return that dataset
-            if (onlyDatasetId !== undefined) {
-                return dataset.pdpVerifierDataSetId === onlyDatasetId;
-            }
-            // If includeAll is true, return all datasets
-            if (includeAll) {
-                return true;
-            }
-            // Otherwise filter by CDN status
-            return dataset.withCDN === withCDN;
-        });
-
-        if (filteredDatasets.length === 0) {
-            return {
-                success: true,
-                datasets: [],
-                count: 0,
-                message: `No datasets found with the given criteria`,
-            };
-        }
-
-        const enrichedDatasets = await Promise.all(
-            filteredDatasets.map(async (dataset: EnhancedDataSetInfo) => {
-                const provider = providers.find((p) => p?.id === dataset.providerId)!
-                const serviceURL = provider.products.PDP?.data.serviceURL || "";
-
-                try {
-                    // STEP 6: Connect to PDP server to get piece information
-                    const pdpServer = new PDPServer(null, serviceURL);
-                    const data = await pdpServer
-                        .getDataSet(dataset.pdpVerifierDataSetId)
-                        .then((data) => {
-                            // Reverse to show most recent uploads first in UI
-                            data.pieces.reverse();
-                            return data;
-                        });
-
-                    // STEP 7: Create pieces map
-                    const pieces = data.pieces.reduce(
-                        (acc, piece: DataSetPieceData) => {
-                            acc[piece.pieceCid.toV1().toString()] =
-                                getPieceInfoFromCidBytes(piece.pieceCid);
-                            return acc;
-                        },
-                        {} as Record<string, UnifiedSizeInfo>
-                    );
-
-                    const piecesMetadata = (await Promise.all(data.pieces.map(async (piece: DataSetPieceData) => {
-                        return { pieceId: piece.pieceId, metadata: await warmStorageService.getPieceMetadata(dataset.pdpVerifierDataSetId, piece.pieceId) };
-                    }))).reduce((acc, piece) => {
-                        acc[piece.pieceId] = piece.metadata;
-                        return acc;
-                    }, {} as Record<number, Record<string, string>>);
-
-                    const getRetrievalUrl = (pieceCid: string) => {
-                        if (dataset.withCDN) {
-                            return `https://${userAddress}.calibration.filbeam.io/${pieceCid}`;
-                        } else {
-                            const endsWithSlash = serviceURL.endsWith('/');
-                            const serviceURLWithoutSlash = endsWithSlash ? serviceURL.slice(0, -1) : serviceURL;
-                            return `${serviceURLWithoutSlash}/piece/${pieceCid}`;
-                        }
-                    };
-
-                    const datasetSizeInfo = data.pieces.reduce((acc, piece: DataSetPieceData) => {
-                        acc.sizeInBytes += Number(pieces[piece.pieceCid.toV1().toString()].sizeBytes);
-                        acc.sizeInKiB += Number(pieces[piece.pieceCid.toV1().toString()].sizeKiB);
-                        acc.sizeInMiB += Number(pieces[piece.pieceCid.toV1().toString()].sizeMiB);
-                        acc.sizeInGB += Number(pieces[piece.pieceCid.toV1().toString()].sizeGiB);
-                        return acc;
-                    }, { sizeInBytes: 0, sizeInKiB: 0, sizeInMiB: 0, sizeInGB: 0, message: "" });
-
-                    const dataSetPieces = data.pieces.map((piece: DataSetPieceData) => ({
-                        pieceCid: piece.pieceCid.toV1().toString(),
-                        retrievalUrl: getRetrievalUrl(piece.pieceCid.toV1().toString()),
-                        sizes: pieces[piece.pieceCid.toV1().toString()],
-                        metadata: piecesMetadata[piece.pieceId],
-                    }));
-
-                    return {
-                        datasetId: dataset.pdpVerifierDataSetId,
-                        withCDN: dataset.withCDN,
-                        datasetMetadata: dataset.metadata,
-                        totalDatasetSizeMessage: sizeInfoMessage(datasetSizeInfo),
-                        dataSetPieces: dataSetPieces,
-                    } as DataSet;
-                } catch (error) {
-                    // console.warn(
-                    //     `Failed to fetch dataset details for ${dataset.pdpVerifierDataSetId}:`,
-                    //     error
-                    // );
-                    // Return dataset without detailed data but preserve basic info
-                    return null;
-                }
+const getPiecesWithMetadata = async (dataSetId: bigint, pieces: Piece[]) => {
+    return await Promise.all(
+        pieces.map(async (piece) => {
+            const metadata = await readContract(client, {
+                address: CONTRACTS.storageView.address,
+                abi: CONTRACTS.storageView.abi,
+                functionName: 'getAllPieceMetadata',
+                args: [dataSetId, BigInt(piece.id)],
             })
-        );
+            return {
+                ...piece,
+                metadata: metadataArrayToObject(metadata),
+            }
+        })
+    )
+}
+
+/**
+ * Retrieves all datasets owned by the account with their pieces and metadata
+ * @param withCDN Filter to only CDN-enabled datasets
+ * @param includeAll Include all datasets regardless of CDN status
+ * @returns Array of datasets with pieces and metadata
+ */
+export const getDatasetsService = async (withCDN: boolean = false, includeAll: boolean = false) => {
+    const dataSets = (await getDataSets(publicClient, {
+        address: account.address,
+    }))
+        .filter((dataset) => includeAll || (withCDN && dataset.cdn));
+
+    const datasetsWithPieces = await Promise.all(dataSets.map(async (dataset) => {
+        const pieces = await getPieces(publicClient, {
+            address: account.address,
+            dataSet: dataset,
+        });
+        return {
+            ...dataset,
+            pieces: await getPiecesWithMetadata(dataset.dataSetId, pieces.pieces),
+        };
+    }));
+
+    return datasetsWithPieces;
+}
+
+/**
+ * Retrieves a single dataset by ID with its pieces and metadata
+ * @param datasetId Dataset identifier
+ * @returns Dataset with pieces and metadata
+ */
+export const getDataSetService = async (datasetId: number) => {
+    const dataset = await getDataSet(publicClient, {
+        dataSetId: BigInt(datasetId),
+    });
+    const pieces = await getPieces(publicClient, {
+        address: account.address,
+        dataSet: dataset,
+    });
+    return {
+        ...dataset,
+        pieces: await getPiecesWithMetadata(dataset.dataSetId, pieces.pieces),
+    };
+}
+
+
+/**
+ * Creates a new dataset on the blockchain
+ * @param provider Storage provider to use
+ * @param cdn Enable CDN for the dataset
+ * @param metadata Key-value metadata for the dataset (max 10 pairs)
+ * @returns Creation result with dataset ID and transaction hash
+ */
+export const createDataSetService = async (provider: PDPProvider, cdn: boolean, metadata: Record<string, string>) => {
+    try {
+        const dataset = await createDataSet(client, {
+            cdn: cdn,
+            payee: provider.payee,
+            endpoint: provider.pdp.serviceURL,
+            metadata: metadata,
+        });
+        const { dataSetId } = await SP.pollForDataSetCreationStatus({ statusUrl: dataset.statusUrl });
 
         return {
             success: true,
-            datasets: enrichedDatasets.filter((dataset) => dataset !== null).map(serializeBigInt) as DataSet[],
-            count: enrichedDatasets.length,
-            message: `Found ${enrichedDatasets.length} dataset(s)`,
+            dataSetId: dataSetId.toString(),
+            txHash: dataset.txHash,
+            message: "Dataset created successfully",
         };
     } catch (error) {
-        return createErrorResponse(
-            "dataset_fetch_failed",
-            `Failed to fetch datasets: ${(error as Error).message}`,
-            { success: false }
-        ) as any;
+        return {
+            success: false,
+            txHash: null,
+            dataSetId: null,
+            message: "Failed to create dataset: " + synapseErrorHandler(error),
+        };
     }
-}
-
-export const getStorageUsageMetrics = async () => {
-    let datasets: DataSet[] = [];
-    let res;
-
-    try {
-        res = await getDatasets();
-        if (res.success === false) {
-            return res;
-        }
-        datasets = res.datasets;
-    } catch (error) {
-        return createErrorResponse(
-            "dataset_fetch_failed",
-            `Failed to fetch datasets: ${(error as Error).message}`,
-            { success: false }
-        );
-    }
-
-    const cdnDatasets = datasets.filter((dataset) => dataset.withCDN);
-    const nonCdnDatasets = datasets.filter((dataset) => !dataset.withCDN);
-
-    const cdnUsedGiB = cdnDatasets.reduce((acc, dataset) => {
-        return acc + dataset.dataSetPieces.reduce((acc, piece) => {
-            return acc + piece.sizes.sizeGiB;
-        }, 0);
-    }, 0);
-
-    const nonCdnUsedGiB = nonCdnDatasets.reduce((acc, dataset) => {
-        return acc + dataset.dataSetPieces.reduce((acc, piece) => {
-            return acc + piece.sizes.sizeGiB;
-        }, 0);
-    }, 0);
-
-    const totalUsedGiB = cdnUsedGiB + nonCdnUsedGiB;
-
-    return {
-        success: true,
-        message: `Found ${cdnDatasets.length} CDN dataset(s) with ${cdnUsedGiB.toFixed(5)} GiB used and ${nonCdnDatasets.length} non-CDN dataset(s) with ${nonCdnUsedGiB.toFixed(5)} GiB used with a total of ${totalUsedGiB.toFixed(5)} GiB used out of ${datasets.length} datasets`,
-    };
 }
