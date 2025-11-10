@@ -11,7 +11,7 @@ import { focStorageResources } from "@/mastra/resources";
 // Create MCP Server to expose tools and agents
 export const mcpServer = new MCPServer({
   name: "FOC Storage MCP",
-  version: "0.1.3",
+  version: "0.1.7",
   description:
     "Professional-grade MCP server for decentralized file storage on Filecoin Onchain Cloud. Powered by the FOC-Synapse SDK, this server provides AI agents with seamless access to Filecoin's distributed storage network. Upload files with automatic payment handling, organize content in datasets, monitor storage balances, and manage providers - all through intuitive MCP tools. Supports both standard storage and CDN-enabled fast retrieval. Perfect for building AI applications that need persistent, censorship-resistant storage.",
   tools: focStorageTools,
@@ -41,7 +41,7 @@ export const mastra = new Mastra({
   }),
   logger: new PinoLogger({
     name: "Mastra",
-    level: "info",
+    level: "silent",
   }),
   bundler: {
     externals: ["@filoz/synapse-sdk"],
