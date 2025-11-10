@@ -36,7 +36,7 @@
 
 ### Cursor
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=foc-storage&config=eyJlbnYiOnsiUFJJVkFURV9LRVkiOiJ5b3VyX3ByaXZhdGVfa2V5X2hlcmUifSwiY29tbWFuZCI6Im5weCAteSBAZmlsLWIvZm9jLXN0b3JhZ2UtbWNwIn0%3D)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=foc-storage&config=eyJlbnYiOnsiUFJJVkFURV9LRVkiOiJ5b3VyX3ByaXZhdGVfa2V5X2hlcmUiLCJGSUxFQ09JTl9ORVRXT1JLIjoiY2FsaWJyYXRpb24ifSwiY29tbWFuZCI6Im5weCAteSBAZmlsLWIvZm9jLXN0b3JhZ2UtbWNwIn0%3D)
 
 After installation, update `PRIVATE_KEY` in your config. [Learn more](https://cursor.com/de/docs/context/mcp)
 
