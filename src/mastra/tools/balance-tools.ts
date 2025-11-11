@@ -1,8 +1,8 @@
-import { createTool } from '@mastra/core';
+import { createTool } from "@mastra/core";
 import { GetBalancesOutputSchema, GetBalancesSchema } from '@/types';
 import { env } from '@/config';
-import { serializeBigInt } from '@/lib';
-import { checkStorageBalance, formatStorageBalanceResult } from '@/services';
+import { serializeBigInt, synapseErrorHandler } from '@/lib';
+import { checkStorageBalance, formatStorageBalanceResult, defaultStorageBalanceResult, defaultStorageBalanceResultFormatted } from '@/services';
 
 /**
  * Balance tools for FOC storage operations.
@@ -62,7 +62,9 @@ export const getBalances = createTool({
     } catch (error) {
       return {
         success: false,
-        error: 'balance_fetch_failed',
+        checkStorageBalanceResultFormatted: defaultStorageBalanceResultFormatted,
+        checkStorageBalanceResult: serializeBigInt(defaultStorageBalanceResult) as any,
+        error: synapseErrorHandler(error),
         message: `Failed to fetch balances: ${(error as Error).message}`,
         progressLog,
       };

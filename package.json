@@ -1,6 +1,6 @@
 {
   "name": "@fil-b/foc-storage-mcp",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "main": "dist/mcp-server.js",
   "bin": {
     "foc-storage-mcp": "./dist/mcp-server.js"
@@ -35,24 +35,24 @@
   "homepage": "https://github.com/FIL-Builders/foc-storage-mcp#readme",
   "type": "module",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.10.0"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.57",
     "@filoz/synapse-core": "^0.1.2",
     "@filoz/synapse-react": "^0.1.2",
     "@filoz/synapse-sdk": "^0.35.3",
-    "@mastra/core": "latest",
-    "@mastra/libsql": "latest",
-    "@mastra/loggers": "latest",
-    "@mastra/mcp": "latest",
-    "@mastra/memory": "latest",
+    "@mastra/core": "^0.24.0",
+    "@mastra/libsql": "^0.16.2",
+    "@mastra/loggers": "^0.10.19",
+    "@mastra/mcp": "^0.14.2",
+    "@mastra/memory": "^0.15.11",
     "ai": "^5.0.82",
     "axios": "^1.10.0",
     "axios-retry": "^4.5.0",
     "decimal.js": "^10.6.0",
     "ethers": "^6.13.0",
-    "mastra": "latest",
+    "mastra": "^0.18.0",
     "tsup": "^8.5.0",
     "viem": "^2.21.0",
     "zod": "^3.25.76"

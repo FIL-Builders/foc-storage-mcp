@@ -64,6 +64,36 @@ interface StorageBalanceResultFormatted {
   isSufficient: boolean;
 }
 
+export const defaultStorageBalanceResult: StorageBalanceResult = {
+  filBalance: 0n,
+  usdfcBalance: 0n,
+  availableStorageFundsUsdfc: 0n,
+  depositNeeded: 0n,
+  availableToFreeUp: 0n,
+  daysLeftAtMaxBurnRate: 0,
+  daysLeftAtBurnRate: 0,
+  isRateSufficient: false,
+  isLockupSufficient: false,
+  isSufficient: false,
+  currentStorageMonthlyRate: 0n,
+  maxStorageMonthlyRate: 0n,
+}
+
+export const defaultStorageBalanceResultFormatted: StorageBalanceResultFormatted = {
+  filBalance: "0 FIL",
+  usdfcBalance: "0 USDFC",
+  availableStorageFundsUsdfc: "0 USDFC",
+  depositNeeded: "0 USDFC",
+  availableToFreeUp: "0 USDFC",
+  daysLeftAtMaxBurnRate: "0 days",
+  daysLeftAtBurnRate: "0 days",
+  currentStorageMonthlyRate: "0 USDFC",
+  maxStorageMonthlyRate: "0 USDFC",
+  isRateSufficient: false,
+  isLockupSufficient: false,
+  isSufficient: false,
+}
+
 /**
  * Checks storage account balance and calculates deposit requirements
  * @param storageCapacityBytes Target storage capacity in bytes (default: 1TB)

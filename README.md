@@ -19,10 +19,13 @@
 
 ## Configuration
 
-**Required:**
+**Requirements:**
+
+- Node.js >= 20.10.0 ([Check version](https://nodejs.org/): `node --version`)
 - `PRIVATE_KEY` - Your Filecoin wallet private key (0x...)
 
 **Optional:**
+
 - `FILECOIN_NETWORK` - `mainnet` (production) or `calibration` (testing, default)
 - `TOTAL_STORAGE_NEEDED_GiB` - Default storage capacity for calculations (default: 150 GiB)
 - `PERSISTENCE_PERIOD_DAYS` - Data retention duration (default: 365 days)
@@ -148,23 +151,26 @@ Most MCP tools support this format:
 
 **Example:** 150 GiB for 1 year ≈ 0.44 USDFC ($0.44)
 
-💡 Ask your agent: *"How much to store 500 GiB for 6 months?"*
+💡 Ask your agent: _"How much to store 500 GiB for 6 months?"_
 
 ## Tools
 
 Ask naturally in Claude, Cursor, or any MCP client:
 
 **File Operations**
+
 - `uploadFile` - Upload files with auto-payment
 - `getDatasets` - List all stored datasets
 - `getDataset` - Get dataset details
 - `createDataset` - Create new dataset container
 
 **Balance & Payments**
+
 - `getBalances` - Check wallet and storage metrics
 - `processPayment` - Deposit USDFC tokens
 
 **Providers & Pricing**
+
 - `getProviders` - List storage providers
 - `estimateStoragePricing` - Calculate costs
 - `getStoragePricingInfo` - Explain pricing models
@@ -182,11 +188,29 @@ Ask naturally in Claude, Cursor, or any MCP client:
 
 ## Troubleshooting
 
+**"Unexpected token 'with'" or import syntax error:**
+
+1. Verify Node.js >= 20.10.0: `node --version`
+2. Clear npx cache:
+   - Command: `npx clear-npx-cache`
+   - Windows: Delete `%LOCALAPPDATA%\npm-cache\_npx`
+   - Linux/Mac: Delete `~/.npm/_npx`
+3. Force fresh install: `npx --yes @fil-b/foc-storage-mcp@latest`
+4. Restart your IDE
+5. If issue persists, check IDE is using correct Node version
+
 **Server not found:** Verify `npx --version`, check JSON syntax, restart IDE
 
 **"PRIVATE_KEY is required":** Add to `env` section, must start with `0x`
 
 **Transaction fails:** Check FIL for gas, verify network setting, confirm USDFC balance
+
+**"Invalid Version" or npm dependency errors:**
+
+1. Clear npm cache: `npm cache clean --force`
+2. Clear npx cache: `npx clear-npx-cache`
+3. Update npm: `npm install -g npm@latest`
+4. As last resort, use older npm: `npm install -g npm@10`
 
 ## Security
 
