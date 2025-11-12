@@ -1,10 +1,8 @@
 {
   "name": "@fil-b/foc-storage-mcp",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "main": "dist/mcp-server.js",
-  "bin": {
-    "foc-storage-mcp": "./dist/mcp-server.js"
-  },
+  "bin": "./dist/mcp-server.js",
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",

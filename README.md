@@ -45,11 +45,24 @@ After installation, update `PRIVATE_KEY` in your config. [Learn more](https://cu
 
 ### Claude Code
 
-```bash
-claude mcp add foc-storage -- npx -y @fil-b/foc-storage-mcp
+Add to `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "foc-storage": {
+      "command": "npx",
+      "args": ["-y", "@fil-b/foc-storage-mcp"],
+      "env": {
+        "PRIVATE_KEY": "your_private_key_here",
+        "FILECOIN_NETWORK": "calibration"
+      }
+    }
+  }
+}
 ```
 
-Edit `.mcp.json` to add `PRIVATE_KEY`. [Learn more](https://docs.claude.com/en/docs/claude-code/mcp)
+[Learn more](https://docs.claude.com/en/docs/claude-code/mcp)
 
 ### Claude Desktop
 
@@ -187,17 +200,6 @@ Ask naturally in Claude, Cursor, or any MCP client:
 ```
 
 ## Troubleshooting
-
-**"Unexpected token 'with'" or import syntax error:**
-
-1. Verify Node.js >= 20.10.0: `node --version`
-2. Clear npx cache:
-   - Command: `npx clear-npx-cache`
-   - Windows: Delete `%LOCALAPPDATA%\npm-cache\_npx`
-   - Linux/Mac: Delete `~/.npm/_npx`
-3. Force fresh install: `npx --yes @fil-b/foc-storage-mcp@latest`
-4. Restart your IDE
-5. If issue persists, check IDE is using correct Node version
 
 **Server not found:** Verify `npx --version`, check JSON syntax, restart IDE
 
