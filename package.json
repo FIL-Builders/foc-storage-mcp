@@ -1,15 +1,22 @@
 {
   "name": "@fil-b/foc-storage-mcp",
-  "version": "0.1.9",
-  "main": "dist/mcp-server.js",
-  "bin": "./dist/mcp-server.js",
+  "version": "0.2.5",
+  "main": "dist/stdio.js",
+  "bin": {
+    "foc-storage-mcp": "dist/stdio.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
   "scripts": {
+    "build:mcp": "tsup && chmod +x dist/stdio.js",
+    "prepublishOnly": "npm run build:mcp",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start",
-    "mcp": "tsx src/mcp-server.ts",
-    "start:mcp": "tsx src/mcp-server.ts",
-    "build:mcp": "tsup"
+    "mcp": "tsx src/mastra/stdio.ts",
+    "start:mcp": "tsx src/mastra/stdio.ts"
   },
   "keywords": [
     "filecoin",
@@ -25,7 +32,7 @@
   "description": "MCP server for decentralized file storage on Filecoin onchain cloud via SynapseSDK",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FIL-Builders/foc-storage-mcp.git"
+    "url": "git+https://github.com/FIL-Builders/foc-storage-mcp.git"
   },
   "bugs": {
     "url": "https://github.com/FIL-Builders/foc-storage-mcp/issues"
@@ -35,7 +42,7 @@
   "engines": {
     "node": ">=20.10.0"
   },
-  "dependencies": {
+  "devDependencies": {
     "@ai-sdk/openai": "^2.0.57",
     "@filoz/synapse-core": "^0.1.2",
     "@filoz/synapse-react": "^0.1.2",
@@ -53,9 +60,7 @@
     "mastra": "^0.18.0",
     "tsup": "^8.5.0",
     "viem": "^2.21.0",
-    "zod": "^3.25.76"
-  },
-  "devDependencies": {
+    "zod": "^3.25.76",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.4",
     "dotenv": "^17.2.3",

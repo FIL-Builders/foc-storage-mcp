@@ -7,7 +7,8 @@
 import { calibration, mainnet } from '@filoz/synapse-core/chains';
 
 import { config } from 'dotenv';
-config();
+// Quiet mode to avoid stdout pollution that breaks MCP JSON protocol
+config({ quiet: true });
 
 import { z } from 'zod';
 
