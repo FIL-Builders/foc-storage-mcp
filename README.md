@@ -160,8 +160,6 @@ Most MCP tools support this format:
 
 **Storage:** $2.50/TiB/month (pay-per-epoch: 30 seconds) • Min: $0.06/month
 
-**CDN Egress:** $7/TiB downloaded • 1 USDFC = ~146 GiB credits
-
 **Example:** 150 GiB for 1 year ≈ 0.44 USDFC ($0.44)
 
 💡 Ask your agent: _"How much to store 500 GiB for 6 months?"_
