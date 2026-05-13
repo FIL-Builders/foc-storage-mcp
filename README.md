@@ -1,51 +1,32 @@
 # Filecoin Onchain Cloud MCP
 
-> MCP server for decentralized file storage on Filecoin Onchain Cloud
+> ⚠️ **DEPRECATED — This repository is archived and no longer maintained.**
+>
+> 👉 **Use [`foc-cli`](https://github.com/FIL-Builders/foc-cli) instead.**
+>
+> `foc-cli` is the official successor. It includes everything this MCP server did, plus a full CLI, AI agent skills, and richer tooling for Filecoin Onchain Cloud.
 
-[![NPM Version](https://img.shields.io/npm/v/@fil-b/foc-storage-mcp)](https://www.npmjs.com/package/@fil-b/foc-storage-mcp)
+[![Status: Archived](https://img.shields.io/badge/status-archived-red)](https://github.com/FIL-Builders/foc-cli)
+[![Replacement: foc-cli](https://img.shields.io/badge/replacement-foc--cli-blue)](https://github.com/FIL-Builders/foc-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node Version](https://img.shields.io/node/v/@fil-b/foc-storage-mcp)](https://nodejs.org)
 
-**@fil-b/foc-storage-mcp** provides AI agents with seamless access to Filecoin's decentralized storage network through the Model Context Protocol (MCP). Store files persistently with automatic payment handling, CDN support, and comprehensive dataset management.
+---
 
-## Features
+## 📣 Migration Notice
 
-- 🛠️ **10 MCP Tools** - Upload, manage, and price storage operations
-- 📁 **Dataset Organization** - Group related files efficiently
-- 💳 **Automatic Payments** - Built-in USDFC handling with gasless permits
-- ⚡ **CDN Support** - Fast retrieval for frequently accessed files
-- 💰 **Cost Estimation** - Calculate costs, explain pricing, convert units
-- 🤖 **AI-Ready** - Designed for Claude, Cursor, and MCP clients
+`@fil-b/foc-storage-mcp` has been replaced by **[`foc-cli`](https://github.com/FIL-Builders/foc-cli)** — a single package that provides:
 
-## Configuration
+- ✅ **MCP server** — same agent-facing tools you had here, kept in sync with the SDK
+- ✅ **CLI** — direct terminal access (`npx foc-cli upload ./file.pdf`)
+- ✅ **AI agent skills** via [skills.sh](https://skills.sh) — works with Claude Code, Cursor, Copilot, Codex, Windsurf, and 20+ AI tools
+- ✅ **Active maintenance** — built on the latest [Synapse SDK](https://github.com/FilOzone/synapse-sdk)
+- ✅ **Expanded features** — multi-upload, redundant copies, structured output (`--json`, `--format yaml`), schema introspection, and more
 
-**Requirements:**
+If you were using this MCP server, switching takes one command.
 
-- Node.js >= 20.10.0 ([Check version](https://nodejs.org/): `node --version`)
-- `PRIVATE_KEY` - Your Filecoin wallet private key (0x...)
+### Quick migration
 
-**Optional:**
-
-- `FILECOIN_NETWORK` - `mainnet` (production) or `calibration` (testing, default)
-- `TOTAL_STORAGE_NEEDED_GiB` - Default storage capacity for calculations (default: 150 GiB)
-- `PERSISTENCE_PERIOD_DAYS` - Data retention duration (default: 365 days)
-- `RUNOUT_NOTIFICATION_THRESHOLD_DAYS` - Balance warning threshold (default: 45 days, **recommended >30**)
-
-> **Note:** Filecoin warm storage requires 30 days paid upfront. Keep balance above 30 days to maintain service.
-
-## Installation
-
-**Jump to:** [Cursor](#cursor) | [Claude Code](#claude-code) | [Claude Desktop](#claude-desktop) | [VS Code](#vs-code) | [Windsurf](#windsurf) | [Codex](#openai-codex) | [Other](#other-tools)
-
-### Cursor
-
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en-US/install-mcp?name=foc-storage&config=eyJlbnYiOnsiUFJJVkFURV9LRVkiOiJ5b3VyX3ByaXZhdGVfa2V5X2hlcmUiLCJGSUxFQ09JTl9ORVRXT1JLIjoiY2FsaWJyYXRpb24ifSwiY29tbWFuZCI6Im5weCAteSBAZmlsLWIvZm9jLXN0b3JhZ2UtbWNwIn0%3D)
-
-After installation, update `PRIVATE_KEY` in your config. [Learn more](https://cursor.com/de/docs/context/mcp)
-
-### Claude Code
-
-Add to `.mcp.json`:
+**Before** (this archived repo):
 
 ```json
 {
@@ -53,183 +34,109 @@ Add to `.mcp.json`:
     "foc-storage": {
       "command": "npx",
       "args": ["-y", "@fil-b/foc-storage-mcp"],
-      "env": {
-        "PRIVATE_KEY": "your_private_key_here",
-        "FILECOIN_NETWORK": "calibration"
-      }
+      "env": { "PRIVATE_KEY": "0x...", "FILECOIN_NETWORK": "calibration" }
     }
   }
 }
 ```
 
-[Learn more](https://docs.claude.com/en/docs/claude-code/mcp)
-
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "foc-storage": {
-      "command": "npx",
-      "args": ["-y", "@fil-b/foc-storage-mcp"],
-      "env": {
-        "PRIVATE_KEY": "your_private_key_here",
-        "FILECOIN_NETWORK": "calibration"
-      }
-    }
-  }
-}
-```
-
-[Learn more](https://modelcontextprotocol.io/quickstart/user)
-
-### VS Code
-
-Create `.vscode/mcp.json`:
-
-```json
-{
-  "servers": {
-    "foc-storage": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@fil-b/foc-storage-mcp"],
-      "env": {
-        "PRIVATE_KEY": "your_private_key_here",
-        "FILECOIN_NETWORK": "calibration"
-      }
-    }
-  }
-}
-```
-
-Enable: Settings → Chat → MCP. Click "start" in `mcp.json` (Agent mode only). [Learn more](https://code.visualstudio.com/docs/copilot/customization/mcp-servers)
-
-### Windsurf
-
-Edit `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "foc-storage": {
-      "command": "npx",
-      "args": ["-y", "@fil-b/foc-storage-mcp"],
-      "env": {
-        "PRIVATE_KEY": "your_private_key_here",
-        "FILECOIN_NETWORK": "calibration"
-      }
-    }
-  }
-}
-```
-
-Restart Windsurf. [Learn more](https://docs.windsurf.com/windsurf/cascade/mcp)
-
-### OpenAI Codex
+**After** (`foc-cli`):
 
 ```bash
-codex mcp add foc-storage -- npx -y @fil-b/foc-storage-mcp
+# Auto-detect your agent and install
+npx foc-cli mcp add
+
+# Or target a specific agent
+npx foc-cli mcp add --agent claude-code
 ```
 
-Edit config to add environment variables. Verify: `codex mcp list`. [Learn more](https://developers.openai.com/codex/mcp)
+Or install as an AI agent skill (recommended for Claude Code, Cursor, and similar):
 
-### Other Tools
-
-Most MCP tools support this format:
-
-```json
-{
-  "mcpServers": {
-    "foc-storage": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@fil-b/foc-storage-mcp"],
-      "env": {
-        "PRIVATE_KEY": "your_private_key_here",
-        "FILECOIN_NETWORK": "calibration"
-      }
-    }
-  }
-}
+```bash
+npx skills add FIL-Builders/foc-cli
 ```
 
-## Pricing
+See the [foc-cli README](https://github.com/FIL-Builders/foc-cli) for full setup and command reference.
 
-**Storage:** $2.50/TiB/month (pay-per-epoch: 30 seconds) • Min: $0.06/month
+### Tool mapping
 
-**Example:** 150 GiB for 1 year ≈ 0.44 USDFC ($0.44)
+Every tool from this MCP server has an equivalent in `foc-cli`:
 
-💡 Ask your agent: _"How much to store 500 GiB for 6 months?"_
+| Old MCP tool (`@fil-b/foc-storage-mcp`) | New in `foc-cli` |
+| --- | --- |
+| `uploadFile` | `foc-cli upload <path>` / MCP `upload` tool |
+| `getDatasets` | `foc-cli dataset list` |
+| `getDataset` | `foc-cli dataset details -d <id>` |
+| `createDataset` | `foc-cli dataset create` |
+| `getBalances` | `foc-cli wallet balance` / `wallet summary` |
+| `processPayment` | `foc-cli wallet deposit <amount>` |
+| `getProviders` | `foc-cli provider list` |
+| `estimateStoragePricing` | `foc-cli wallet costs --extraBytes <n> --extraRunway <months>` |
+| `getStoragePricingInfo` | `foc-cli docs --prompt "pricing"` |
+| `convertStorageSize` | Handled natively by CLI flags |
 
-## Tools
+---
 
-Ask naturally in Claude, Cursor, or any MCP client:
+## About this archive
 
-**File Operations**
+The sections below describe `@fil-b/foc-storage-mcp` as it was when this repository was active. They are preserved for reference only — **no further updates, bug fixes, or security patches will be issued**. Please migrate to [`foc-cli`](https://github.com/FIL-Builders/foc-cli).
 
-- `uploadFile` - Upload files with auto-payment
-- `getDatasets` - List all stored datasets
-- `getDataset` - Get dataset details
-- `createDataset` - Create new dataset container
+<details>
+<summary><strong>Click to expand original README</strong></summary>
 
-**Balance & Payments**
+### What it was
 
-- `getBalances` - Check wallet and storage metrics
-- `processPayment` - Deposit USDFC tokens
+`@fil-b/foc-storage-mcp` provided AI agents with access to Filecoin's decentralized storage network through the Model Context Protocol (MCP). It supported file upload with automatic USDFC payment handling, dataset organization, CDN-backed retrieval, and cost estimation.
 
-**Providers & Pricing**
+### Original tools (10)
 
-- `getProviders` - List storage providers
-- `estimateStoragePricing` - Calculate costs
-- `getStoragePricingInfo` - Explain pricing models
-- `convertStorageSize` - Convert units
+**File operations**
 
-## Usage Examples
+- `uploadFile` — Upload files with auto-payment
+- `getDatasets` — List all stored datasets
+- `getDataset` — Get dataset details
+- `createDataset` — Create new dataset container
 
-```
-"Check my storage balance"
-"Upload presentation.pdf with CDN enabled"
-"How much to store 2 TB for 1 year?"
-"Create a dataset for Q4 reports"
-"Show all my datasets"
-```
+**Balance & payments**
 
-## Troubleshooting
+- `getBalances` — Check wallet and storage metrics
+- `processPayment` — Deposit USDFC tokens
 
-**Server not found:** Verify `npx --version`, check JSON syntax, restart IDE
+**Providers & pricing**
 
-**"PRIVATE_KEY is required":** Add to `env` section, must start with `0x`
+- `getProviders` — List storage providers
+- `estimateStoragePricing` — Calculate costs
+- `getStoragePricingInfo` — Explain pricing models
+- `convertStorageSize` — Convert units
 
-**Transaction fails:** Check FIL for gas, verify network setting, confirm USDFC balance
+### Original configuration
 
-**"Invalid Version" or npm dependency errors:**
+**Requirements:** Node.js >= 20.10.0, `PRIVATE_KEY` env var (Filecoin wallet, `0x...`)
 
-1. Clear npm cache: `npm cache clean --force`
-2. Clear npx cache: `npx clear-npx-cache`
-3. Update npm: `npm install -g npm@latest`
-4. As last resort, use older npm: `npm install -g npm@10`
+**Optional env vars:**
 
-## Security
+- `FILECOIN_NETWORK` — `mainnet` or `calibration` (default)
+- `TOTAL_STORAGE_NEEDED_GiB` — default 150
+- `PERSISTENCE_PERIOD_DAYS` — default 365
+- `RUNOUT_NOTIFICATION_THRESHOLD_DAYS` — default 45 (recommended >30; Filecoin warm storage requires 30 days paid upfront)
 
-- Never commit private keys or `.env` files
-- Test on Calibration network before mainnet
-- Keep balance >30 days (Filecoin warm storage requirement)
-- Monitor balance regularly with `getBalances`
-- Use hardware wallets for production
+### Original pricing
+
+Storage was billed at $2.50/TiB/month, paid per-epoch (30s), with a minimum of $0.06/month. Example: 150 GiB for 1 year ≈ 0.44 USDFC.
+
+These economics are unchanged in `foc-cli`, which uses the same Filecoin Warm Storage Service (FWSS) under the hood.
+
+</details>
+
+---
 
 ## Links
 
-- [GitHub](https://github.com/FIL-Builders/foc-storage-mcp)
-- [NPM](https://www.npmjs.com/package/@fil-b/foc-storage-mcp)
-- [Filecoin Docs](https://docs.filecoin.io/)
-- [MCP Protocol](https://modelcontextprotocol.io/)
-
-## Contributing
-
-Contributions welcome! Open an issue for major changes.
+- 🚀 **Replacement:** [FIL-Builders/foc-cli](https://github.com/FIL-Builders/foc-cli)
+- 📦 NPM (replacement): [foc-cli](https://www.npmjs.com/package/foc-cli)
+- 📚 [Filecoin Onchain Cloud Docs](https://docs.filecoin.cloud)
+- 🤖 [MCP Protocol](https://modelcontextprotocol.io/)
+- 🛠 [Skills.sh](https://skills.sh)
 
 ## License
 
@@ -237,4 +144,4 @@ MIT © [@nijoe1](https://github.com/nijoe1)
 
 ---
 
-Built with ❤️ by @FILBuilders for the Filecoin ecosystem
+Built with ❤️ by [@FILBuilders](https://github.com/FIL-Builders) for the Filecoin ecosystem.
