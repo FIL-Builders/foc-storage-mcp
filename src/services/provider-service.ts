@@ -1,5 +1,5 @@
-import { readProviders, getProvider as readProvider } from "@filoz/synapse-core/warm-storage";
-import { client, publicClient } from "./viem";
+import { getPDPProviders, getPDPProvider } from "@filoz/synapse-core/sp-registry";
+import { publicClient } from "./viem";
 import { serializeBigInt } from "@/lib";
 
 /**
@@ -7,11 +7,8 @@ import { serializeBigInt } from "@/lib";
  * @returns Array of active storage providers
  */
 export const getProviders = async () => {
-    const providers = (await readProviders(
-        client,
-    )).filter((p) => p.isActive);
-
-    return providers;
+    const { providers } = await getPDPProviders(publicClient);
+    return providers.filter((p) => p.isActive);
 }
 
 /**
@@ -19,9 +16,26 @@ export const getProviders = async () => {
  * @param providerId Provider identifier
  * @returns Provider details with serialized BigInt values
  */
-export const getProvider = async (providerId: number) => {
-    const provider = await readProvider(publicClient, {
+export const getProvider = async (providerId: bigint | number) => {
+    const provider = await getPDPProvider(publicClient, {
         providerId: BigInt(providerId),
     });
+    if (!provider) {
+        throw new Error(`Provider ${providerId} not found`);
+    }
     return serializeBigInt(provider);
+}
+
+/**
+ * Retrieves the raw provider record (BigInt fields preserved)
+ * @param providerId Provider identifier
+ */
+export const getProviderRaw = async (providerId: bigint | number) => {
+    const provider = await getPDPProvider(publicClient, {
+        providerId: BigInt(providerId),
+    });
+    if (!provider) {
+        throw new Error(`Provider ${providerId} not found`);
+    }
+    return provider;
 }

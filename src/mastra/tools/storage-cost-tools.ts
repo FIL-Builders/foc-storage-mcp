@@ -77,7 +77,7 @@ const EstimateStorageCostOutputSchema = z.object({
 export const estimateStoragePricing = createTool({
   id: "estimateStoragePricing",
   description:
-    "Calculate storage costs for Filecoin OnchainCloud and explain pricing models. Provides: (1) Cost estimates with monthly/total breakdowns, (2) Comprehensive explanation of storage pricing (pay-per-epoch, $2.50/TiB/month, $0.06 minimum), (3) CDN egress pricing details ($7/TiB downloads, 1 USDFC = ~146 GiB credits). ⚠️ CRITICAL: When explaining budgeting, ALWAYS warn that storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service. Recommend maintaining at least 45 days of balance for safety margin. Use when users ask about storage costs, pricing models, CDN fees, or need to budget for storage. Clarifies that CDN 1 USDFC is NOT a fee but pre-paid egress credits that can be topped up anytime.",
+    "Calculate storage costs for Filecoin OnchainCloud and explain pricing models. Provides: (1) Cost estimates with monthly/total breakdowns, (2) Comprehensive explanation of storage pricing (pay-per-epoch, $2.50/TiB/month, $0.06 minimum), (3) CDN egress pricing details ($14/TiB downloads, 1 USDFC = ~73 GiB credits). ⚠️ CRITICAL: When explaining budgeting, ALWAYS warn that storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service. Recommend maintaining at least 45 days of balance for safety margin. Use when users ask about storage costs, pricing models, CDN fees, or need to budget for storage. Clarifies that CDN 1 USDFC is NOT a fee but pre-paid egress credits that can be topped up anytime.",
   inputSchema: EstimateStorageCostSchema,
   outputSchema: EstimateStorageCostOutputSchema,
   execute: async ({ context }) => {
@@ -101,8 +101,8 @@ export const estimateStoragePricing = createTool({
         createCDNDataset
       );
 
-      // Calculate CDN egress credits (1 USDFC = ~146 GiB at $7/TiB rate)
-      // 1 USDFC buys (1/CDN_EGRESS_RATE_PER_TIB) * 1024 GiB = ~146.29 GiB of egress
+      // Calculate CDN egress credits (1 USDFC = ~73 GiB at $14/TiB rate)
+      // 1 USDFC buys (1/CDN_EGRESS_RATE_PER_TIB) * 1024 GiB = ~73.14 GiB of egress
       const cdnEgressCreditsGiB = createCDNDataset ? (1 / CDN_EGRESS_RATE_PER_TIB) * 1024 : 0;
 
       // Create a human-readable breakdown
@@ -179,14 +179,14 @@ export const estimateStoragePricing = createTool({
         ``,
         `CDN enables fast file retrieval with egress (download) charges:`,
         ``,
-        `1. EGRESS RATE: $7 per TiB downloaded`,
-        `   - ~$0.0068 per GiB downloaded`,
+        `1. EGRESS RATE: $14 per TiB downloaded`,
+        `   - ~$0.0137 per GiB downloaded`,
         `   - Only pay for actual data transferred`,
         ``,
         `2. CDN CREDITS TOP-UP (Not a Fee!):`,
         `   - Creating a new CDN dataset requires 1 USDFC top-up`,
         `   - This is NOT a fee - it's pre-paid egress credits`,
-        `   - 1 USDFC = ~146.29 GiB of download credits`,
+        `   - 1 USDFC = ~73.14 GiB of download credits`,
         `   - Credits are deducted as files are downloaded`,
         ``,
         `3. REUSING DATASETS:`,
@@ -200,9 +200,9 @@ export const estimateStoragePricing = createTool({
         `   - No expiration on credits`,
         ``,
         `5. EXAMPLE CALCULATIONS:`,
-        `   - 1 USDFC → ~146 GiB of downloads`,
-        `   - 10 USDFC → ~1.43 TiB of downloads`,
-        `   - 70 USDFC → ~10 TiB of downloads`,
+        `   - 1 USDFC → ~73 GiB of downloads`,
+        `   - 14 USDFC → ~1 TiB of downloads`,
+        `   - 140 USDFC → ~10 TiB of downloads`,
         ``,
         `6. WHEN TO USE CDN:`,
         `   - Frequently accessed files`,
@@ -423,9 +423,9 @@ export const getStoragePricingInfo = createTool({
       };
 
       const cdnModel = includeCDNExample ? {
-        egressRate: "$7 per TiB downloaded (~$0.0068 per GiB)",
+        egressRate: "$14 per TiB downloaded (~$0.0137 per GiB)",
         creditsTopUp: "1 USDFC required when creating first CDN dataset",
-        creditsPerUSDFC: "~146.29 GiB of egress credits",
+        creditsPerUSDFC: "~73.14 GiB of egress credits",
         isTopUpAFee: false,
         canTopUpMore: true,
       } : undefined;
@@ -468,7 +468,7 @@ export const getStoragePricingInfo = createTool({
           `  Grand Total: ${estimate.totalCostFormatted} USDFC`,
           ``,
           `Note: The CDN top-up gives you ${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads.`,
-          `      If you download your 1 TiB once, you'd need ~7 USDFC more in credits.`,
+          `      If you download your 1 TiB once, you'd need ~14 USDFC more in credits.`,
         );
       } else {
         exampleBreakdown.push(

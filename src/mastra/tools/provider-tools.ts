@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core";
 import { GetProvidersOutputSchema, GetProvidersSchema } from "@/types";
 import { serializeBigInt } from "@/lib";
 import { publicClient } from "@/services/viem";
-import { readProviders } from "@filoz/synapse-core/warm-storage";
+import { getPDPProviders } from "@filoz/synapse-core/sp-registry";
 
 /**
  * Provider tools for FOC storage operations.
@@ -16,9 +16,8 @@ export const getProviders = createTool({
   execute: async ({ context }) => {
     try {
       // Fetch all providers using publicClient (respects env.FILECOIN_NETWORK)
-      const providers = (await readProviders(
-        publicClient,
-      )).filter((p) =>
+      const { providers: allProviders } = await getPDPProviders(publicClient);
+      const providers = allProviders.filter((p) =>
         context.onlyApproved ? p.isActive : true
       );
 

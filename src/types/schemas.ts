@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { env } from '@/config';
 import { SIZE_CONSTANTS } from '@filoz/synapse-core/utils';
 import { DataSetWithPieces } from '@filoz/synapse-react';
-import { PDPProvider } from '@filoz/synapse-core/warm-storage';
+import { PDPProvider } from '@filoz/synapse-core/sp-registry';
 // Dataset tools schemas
 export const GetDatasetsSchema = z.object({
   includeAllDatasets: z.boolean().optional().default(true)

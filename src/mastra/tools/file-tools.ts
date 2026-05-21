@@ -89,17 +89,18 @@ export const uploadFile = createTool({
       // PHASE 6: Storage service creation
       log("Creating storage service...");
 
+      const isExistingDataset = context.datasetId !== undefined;
       const storageService = await synapse.storage.createContext({
-        dataSetId: context.datasetId ? Number(context.datasetId) : undefined,
+        dataSetId: context.datasetId ? BigInt(context.datasetId) : undefined,
         withCDN: context.withCDN || false,
         callbacks: {
           onDataSetResolved: (info) => {
             log(`Dataset ${info.dataSetId} resolved`);
-            log(`Dataset provider: ${Number(info.provider.id)}`);
-            log(`Is existing dataset: ${info.isExisting}`);
+            log(`Dataset provider: ${info.provider.id.toString()}`);
+            log(`Is existing dataset: ${isExistingDataset}`);
           },
           onProviderSelected: (provider) => {
-            log(`Provider selected: ${provider.id}`);
+            log(`Provider selected: ${provider.id.toString()}`);
           },
         },
       });
@@ -108,31 +109,32 @@ export const uploadFile = createTool({
       log("Uploading file to provider...");
       let uploadTxHash: string | undefined;
 
-      const { pieceCid } = await storageService.upload(uint8ArrayBytes, {
-        metadata: context.metadata,
-        onUploadComplete: (piece) => {
-          log(`Upload complete (pieceCid: ${piece.toV1().toString()})`);
+      const uploadResult = await storageService.upload(uint8ArrayBytes, {
+        pieceMetadata: context.metadata,
+        onStored: (_providerId, piece) => {
+          log(`Upload stored (pieceCid: ${piece.toV1().toString()})`);
         },
-        onPieceAdded: (hash) => {
-          uploadTxHash = hash;
-          log(`Piece added to dataset (tx: ${hash || "pending"})`);
+        onPiecesAdded: (transaction) => {
+          uploadTxHash = transaction;
+          log(`Piece added to dataset (tx: ${transaction || "pending"})`);
         },
-        onPieceConfirmed: () => {
+        onPiecesConfirmed: () => {
           log("Piece confirmed on blockchain");
         },
       });
 
+      const { pieceCid } = uploadResult;
       const provider = await getProvider(storageService.provider.id);
 
-      const getRetrievalUrl = async (pieceCid: string) => {
+      const getRetrievalUrl = async (pieceCidString: string) => {
         if (context.withCDN) {
           const network = env.FILECOIN_NETWORK === 'mainnet' ? 'mainnet' : 'calibration';
-          return `https://${(await synapse.getSigner().getAddress())}.${network}.filbeam.io/${pieceCid}`;
+          return `https://${synapse.client.account.address}.${network}.filbeam.io/${pieceCidString}`;
         } else {
           const serviceURL = provider.pdp.serviceURL;
           const endsWithSlash = serviceURL.endsWith('/');
           const serviceURLWithoutSlash = endsWithSlash ? serviceURL.slice(0, -1) : serviceURL;
-          return `${serviceURLWithoutSlash}/piece/${pieceCid}`;
+          return `${serviceURLWithoutSlash}/piece/${pieceCidString}`;
         }
       };
 

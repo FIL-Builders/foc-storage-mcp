@@ -4,12 +4,14 @@ import {
 } from "@filoz/synapse-core/utils";
 import { formatUnits } from "viem";
 import { MAX_UINT256, env } from "@/config";
-import { ServicePriceResult } from "@filoz/synapse-core/warm-storage";
+import { type getServicePrice } from "@filoz/synapse-core/warm-storage";
 import * as ERC20 from "@filoz/synapse-core/erc20";
 import * as Payments from "@filoz/synapse-core/pay";
 import { getBalance } from "viem/actions";
 import * as WarmStorage from "@filoz/synapse-core/warm-storage";
 import { account, client } from "@/services/viem";
+
+type ServicePriceResult = getServicePrice.OutputType;
 
 /**
  * Calculates storage costs per epoch, per day, and per month for a given size
@@ -112,10 +114,10 @@ export const checkStorageBalance = async (
     ERC20.balance(client, {
       address: account.address,
     }),
-    Payments.accountInfo(client, {
+    Payments.accounts(client, {
       address: account.address,
     }),
-    WarmStorage.servicePrice(client),
+    WarmStorage.getServicePrice(client),
     Payments.operatorApprovals(client, {
       address: account.address,
     }),
@@ -123,7 +125,7 @@ export const checkStorageBalance = async (
 
   const storageCosts = calculateStorageCost(prices, storageCapacityBytes)
 
-  const currentMonthlyRate = operatorApprovals.rateUsed * TIME_CONSTANTS.EPOCHS_PER_MONTH;
+  const currentMonthlyRate = operatorApprovals.rateUsage * TIME_CONSTANTS.EPOCHS_PER_MONTH;
 
   const maxMonthlyRate = storageCosts.perMonth
 
@@ -228,7 +230,7 @@ export interface StorageCostEstimate {
  * - Storage: $2.50/TiB/month
  * - Minimum: $0.06/month (~24.567 GiB threshold)
  * - CDN Setup: 1 USDFC (one-time for new datasets)
- * - CDN Egress: $7/TiB downloaded (pre-paid credits)
+ * - CDN Egress: $14/TiB downloaded (pre-paid credits)
  */
 export const estimateStorageCost = async (
   sizeInBytes: number,
@@ -236,7 +238,7 @@ export const estimateStorageCost = async (
   createCDNDataset: boolean = false
 ): Promise<StorageCostEstimate> => {
   // Fetch current pricing from the service using synapse-core
-  const prices = await WarmStorage.servicePrice(client);
+  const prices = await WarmStorage.getServicePrice(client);
 
   const { minimumPricePerMonth, pricePerTiBPerMonthNoCDN } = prices;
 
