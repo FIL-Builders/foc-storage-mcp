@@ -35,7 +35,15 @@ export const getBalances = createTool({
 
       log("Calculating storage metrics and requirements...");
       const formattedResult = formatStorageBalanceResult(checkStorageBalanceResult);
-      const serializedResult = serializeBigInt(checkStorageBalanceResult);
+      const serializedResult = serializeBigInt({
+        ...checkStorageBalanceResult,
+        daysLeftAtMaxBurnRate: Number.isFinite(checkStorageBalanceResult.daysLeftAtMaxBurnRate)
+          ? checkStorageBalanceResult.daysLeftAtMaxBurnRate
+          : "Infinity",
+        daysLeftAtBurnRate: Number.isFinite(checkStorageBalanceResult.daysLeftAtBurnRate)
+          ? checkStorageBalanceResult.daysLeftAtBurnRate
+          : "Infinity",
+      });
 
       log(`Balance check complete. Available USDFC: ${formattedResult.usdfcBalance}`);
 

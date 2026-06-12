@@ -21,9 +21,7 @@ const EnvSchema = z.object({
 });
 
 export const env = {
-  ...EnvSchema.parse(process.env), ...{
-    CDN_DATASET_FEE: 10n ** 18n,
-  }
+  ...EnvSchema.parse(process.env),
 }
 
 export const NETWORK_CONFIGS = {
@@ -49,9 +47,6 @@ export const CONTRACTS = env.FILECOIN_NETWORK === 'calibration' ? calibration.co
 /** Max uint256 for Solidity unlimited approvals */
 export const MAX_UINT256 = 2n ** 256n - 1n;
 
-/** Dataset creation fee: 0.1 USDFC (prevents spam, covers network costs) */
-export const DATA_SET_CREATION_FEE = BigInt(0.1 * 10 ** 18);
-
 /** Merkle tree leaf size (32 bytes) for storage calculations */
 export const LEAF_SIZE = 32n;
 
@@ -60,9 +55,6 @@ export const BYTES_PER_TIB = 1024n * 1024n * 1024n * 1024n;
 
 /** Bytes per GiB for size conversions */
 export const BYTES_PER_GIB = 1024n * 1024n * 1024n;
-
-/** CDN egress rate: $14 per TiB */
-export const CDN_EGRESS_RATE_PER_TIB = 14;
 
 /** Default expected storage capacity (1 TB) */
 export const DEFAULT_EXPECTED_STORAGE_BYTES = 1024 * 1024 * 1024 * 1024;

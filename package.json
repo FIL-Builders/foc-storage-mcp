@@ -1,6 +1,6 @@
 {
   "name": "@fil-b/foc-storage-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "main": "dist/stdio.js",
   "bin": {
     "foc-storage-mcp": "dist/stdio.js"
@@ -12,6 +12,7 @@
   "scripts": {
     "build:mcp": "tsup && chmod +x dist/stdio.js",
     "prepublishOnly": "npm run build:mcp",
+    "test": "tsx --test tests/**/*.test.ts",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start",
@@ -44,9 +45,9 @@
   },
   "devDependencies": {
     "@ai-sdk/openai": "^2.0.57",
-    "@filoz/synapse-core": "^0.5.2",
-    "@filoz/synapse-react": "^0.2.3",
-    "@filoz/synapse-sdk": "^0.41.0",
+    "@filoz/synapse-core": "^0.7.0",
+    "@filoz/synapse-react": "^0.3.0",
+    "@filoz/synapse-sdk": "^1.0.1",
     "@mastra/core": "^0.24.0",
     "@mastra/libsql": "^0.16.2",
     "@mastra/loggers": "^0.10.19",

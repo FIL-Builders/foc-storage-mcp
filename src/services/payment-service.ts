@@ -26,8 +26,7 @@ export async function processPaymentService(
 ): Promise<PaymentResult> {
 
   try {
-    // Process payment with EIP-2612 permit (single transaction)
-    const hash = await Payments.depositAndApprove(client, {
+    const hash = await Payments.fund(client, {
       amount: BigInt(depositAmount),
     });
 
