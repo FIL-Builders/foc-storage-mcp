@@ -4,14 +4,19 @@ import {
 } from "@filoz/synapse-core/utils";
 import { formatUnits } from "viem";
 import { MAX_UINT256, env } from "@/config";
-import { type getServicePrice } from "@filoz/synapse-core/warm-storage";
 import * as ERC20 from "@filoz/synapse-core/erc20";
 import * as Payments from "@filoz/synapse-core/pay";
 import { getBalance } from "viem/actions";
-import * as WarmStorage from "@filoz/synapse-core/warm-storage";
+import {
+  calculateEffectiveRate,
+  type getPriceList,
+  getPriceList as getWarmStoragePriceList,
+  getUploadCosts,
+} from "@filoz/synapse-core/warm-storage";
 import { account, client } from "@/services/viem";
 
-type ServicePriceResult = getServicePrice.OutputType;
+type PriceListResult = getPriceList.OutputType;
+type UploadCostsResult = Awaited<ReturnType<typeof getUploadCosts>>;
 
 /**
  * Calculates storage costs per epoch, per day, and per month for a given size
@@ -19,16 +24,17 @@ type ServicePriceResult = getServicePrice.OutputType;
  * @param sizeInBytes Storage size in bytes
  * @returns Object containing cost per epoch, per day, and per month in base units
  */
-const calculateStorageCost = (prices: ServicePriceResult, sizeInBytes: number) => {
-  const { pricePerTiBPerMonthNoCDN, epochsPerMonth } = prices
-  // Calculate price per byte per epoch
-  const sizeInBytesBigint = BigInt(sizeInBytes)
-  const perEpoch =
-    (pricePerTiBPerMonthNoCDN * sizeInBytesBigint) /
-    (SIZE_CONSTANTS.TiB * epochsPerMonth)
+const calculateStorageCost = (priceList: PriceListResult, sizeInBytes: number) => {
+  const rate = calculateEffectiveRate({
+    sizeInBytes: BigInt(sizeInBytes),
+    storagePerTibPerMonth: priceList.rates.storagePerTibPerMonth,
+    datasetFeePerMonth: priceList.rates.datasetFeePerMonth,
+    epochsPerMonth: TIME_CONSTANTS.EPOCHS_PER_MONTH,
+  });
 
+  const perEpoch = rate.ratePerEpoch
   const perDay = perEpoch * TIME_CONSTANTS.EPOCHS_PER_DAY
-  const perMonth = perEpoch * epochsPerMonth
+  const perMonth = rate.ratePerMonth
   return {
     perEpoch,
     perDay,
@@ -36,7 +42,7 @@ const calculateStorageCost = (prices: ServicePriceResult, sizeInBytes: number) =
   }
 }
 
-interface StorageBalanceResult {
+export interface StorageBalanceResult {
   filBalance: bigint;
   usdfcBalance: bigint;
   availableStorageFundsUsdfc: bigint;
@@ -49,6 +55,13 @@ interface StorageBalanceResult {
   isSufficient: boolean;
   currentStorageMonthlyRate: bigint;
   maxStorageMonthlyRate: bigint;
+}
+
+export interface StorageBalanceUploadOptions {
+  isNewDataSet: boolean;
+  withCDN?: boolean;
+  currentDataSetSize?: bigint;
+  pieceCount?: bigint;
 }
 
 interface StorageBalanceResultFormatted {
@@ -96,34 +109,28 @@ export const defaultStorageBalanceResultFormatted: StorageBalanceResultFormatted
   isSufficient: false,
 }
 
-/**
- * Checks storage account balance and calculates deposit requirements
- * @param storageCapacityBytes Target storage capacity in bytes (default: 1TB)
- * @param persistencePeriodDays How long to maintain storage (default: 365 days)
- * @returns Comprehensive balance information including FIL, USDFC, deposit needs, and sufficiency status
- */
-export const checkStorageBalance = async (
-  storageCapacityBytes: number = env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB),
-  persistencePeriodDays: number = env.PERSISTENCE_PERIOD_DAYS
-): Promise<StorageBalanceResult> => {
+interface StorageBalanceCalculationInput {
+  filBalance: bigint;
+  usdfcBalance: bigint;
+  availableFunds: bigint;
+  priceList: PriceListResult;
+  operatorApprovals: Payments.operatorApprovals.OutputType;
+  storageCapacityBytes: number;
+  persistencePeriodDays: number;
+  uploadCosts?: UploadCostsResult;
+}
 
-  const [filRaw, { value: usdfcRaw }, { availableFunds }, prices, operatorApprovals] = await Promise.all([
-    getBalance(client, {
-      address: account.address,
-    }),
-    ERC20.balance(client, {
-      address: account.address,
-    }),
-    Payments.accounts(client, {
-      address: account.address,
-    }),
-    WarmStorage.getServicePrice(client),
-    Payments.operatorApprovals(client, {
-      address: account.address,
-    }),
-  ]);
-
-  const storageCosts = calculateStorageCost(prices, storageCapacityBytes)
+export const buildStorageBalanceResult = ({
+  filBalance,
+  usdfcBalance,
+  availableFunds,
+  priceList,
+  operatorApprovals,
+  storageCapacityBytes,
+  persistencePeriodDays,
+  uploadCosts,
+}: StorageBalanceCalculationInput): StorageBalanceResult => {
+  const storageCosts = calculateStorageCost(priceList, storageCapacityBytes)
 
   const currentMonthlyRate = operatorApprovals.rateUsage * TIME_CONSTANTS.EPOCHS_PER_MONTH;
 
@@ -134,25 +141,40 @@ export const checkStorageBalance = async (
 
   const amountNeeded = storageCosts.perDay * BigInt(persistencePeriodDays);
 
-  const totalDepositNeeded =
+  const recurringDepositNeeded =
     daysLeftAtMaxBurnRate >= env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS
       ? 0n
-      : amountNeeded - availableFunds;
+      : amountNeeded > availableFunds ? amountNeeded - availableFunds : 0n;
+
+  const totalDepositNeeded = uploadCosts
+    ? uploadCosts.depositNeeded > recurringDepositNeeded ? uploadCosts.depositNeeded : recurringDepositNeeded
+    : recurringDepositNeeded;
 
   const availableToFreeUp =
     availableFunds > amountNeeded
       ? availableFunds - amountNeeded
       : 0n;
 
-  const isRateSufficient = operatorApprovals.rateAllowance === MAX_UINT256
+  const hasFwssMaxApproval = operatorApprovals.isApproved && operatorApprovals.rateAllowance === MAX_UINT256
 
-  const isLockupSufficient = operatorApprovals.lockupAllowance === MAX_UINT256;
+  const isRateSufficient = uploadCosts
+    ? !uploadCosts.needsFwssMaxApproval
+    : hasFwssMaxApproval
 
-  const isSufficient = isRateSufficient && isLockupSufficient && daysLeftAtMaxBurnRate >= env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS;
+  const isLockupSufficient = uploadCosts
+    ? !uploadCosts.needsFwssMaxApproval
+    : operatorApprovals.isApproved &&
+      operatorApprovals.lockupAllowance >= MAX_UINT256 / 2n &&
+      operatorApprovals.maxLockupPeriod >= priceList.lockups.defaultLockupPeriod;
+
+  const isRecurringSufficient = daysLeftAtMaxBurnRate >= env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS;
+  const isSufficient = uploadCosts
+    ? uploadCosts.ready && isRecurringSufficient
+    : isRateSufficient && isLockupSufficient && isRecurringSufficient;
 
   return {
-    filBalance: filRaw,
-    usdfcBalance: usdfcRaw,
+    filBalance,
+    usdfcBalance,
     availableStorageFundsUsdfc: availableFunds,
     depositNeeded: totalDepositNeeded,
     availableToFreeUp: availableToFreeUp,
@@ -164,6 +186,58 @@ export const checkStorageBalance = async (
     currentStorageMonthlyRate: currentMonthlyRate,
     maxStorageMonthlyRate: maxMonthlyRate,
   };
+};
+
+/**
+ * Checks storage account balance and calculates deposit requirements
+ * @param storageCapacityBytes Target storage capacity in bytes (default: 1TB)
+ * @param persistencePeriodDays How long to maintain storage (default: 365 days)
+ * @param uploadOptions Optional upload shape for v1 upload fee and lockup preflight
+ * @returns Comprehensive balance information including FIL, USDFC, deposit needs, and sufficiency status
+ */
+export const checkStorageBalance = async (
+  storageCapacityBytes: number = env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB),
+  persistencePeriodDays: number = env.PERSISTENCE_PERIOD_DAYS,
+  uploadOptions?: StorageBalanceUploadOptions,
+): Promise<StorageBalanceResult> => {
+  const uploadCostsPromise = uploadOptions
+    ? getUploadCosts(client, {
+      clientAddress: account.address,
+      dataSize: BigInt(storageCapacityBytes),
+      isNewDataSet: uploadOptions.isNewDataSet,
+      withCDN: uploadOptions.withCDN,
+      currentDataSetSize: uploadOptions.currentDataSetSize,
+      pieceCount: uploadOptions.pieceCount,
+    })
+    : Promise.resolve(undefined);
+
+  const [filRaw, { value: usdfcRaw }, { availableFunds }, priceList, operatorApprovals, uploadCosts] = await Promise.all([
+    getBalance(client, {
+      address: account.address,
+    }),
+    ERC20.balance(client, {
+      address: account.address,
+    }),
+    Payments.accounts(client, {
+      address: account.address,
+    }),
+    getWarmStoragePriceList(client),
+    Payments.operatorApprovals(client, {
+      address: account.address,
+    }),
+    uploadCostsPromise,
+  ]);
+
+  return buildStorageBalanceResult({
+    filBalance: filRaw,
+    usdfcBalance: usdfcRaw,
+    availableFunds,
+    priceList,
+    operatorApprovals,
+    storageCapacityBytes,
+    persistencePeriodDays,
+    uploadCosts,
+  });
 };
 
 /**
@@ -218,49 +292,70 @@ export interface StorageCostEstimate {
     sizeInBytes: number;
     sizeFormatted: string;
     durationInMonths: number;
-    pricePerTiBPerMonth: bigint;
-    minimumPricePerMonth: bigint;
-    appliedMinimum: boolean;
+    storagePerTiBPerMonth: bigint;
+    datasetFeePerMonth: bigint;
+    cdnEgressPerTiB: bigint;
+    cacheMissEgressPerTiB: bigint;
+    recurringMonthlyRate: bigint;
+    createDataSetFee: bigint;
+    addPiecesFee: bigint;
+    oneTimeFees: bigint;
+    lockupRequired: bigint;
+    depositNeeded: bigint;
+    needsFwssMaxApproval: boolean;
   };
 }
 
-/**
- * Estimate storage costs for a given size and duration
- * Based on Filecoin OnchainCloud pricing model:
- * - Storage: $2.50/TiB/month
- * - Minimum: $0.06/month (~24.567 GiB threshold)
- * - CDN Setup: 1 USDFC (one-time for new datasets)
- * - CDN Egress: $14/TiB downloaded (pre-paid credits)
- */
-export const estimateStorageCost = async (
+export interface DatasetCreationFundingEstimate {
+  depositNeeded: bigint;
+  requiredFunding: bigint;
+  createDataSetFee: bigint;
+  lockupRequired: bigint;
+  needsFwssMaxApproval: boolean;
+}
+
+export const estimateDatasetCreationFunding = async (
+  withCDN: boolean,
+): Promise<DatasetCreationFundingEstimate> => {
+  const [accountInfo, priceList] = await Promise.all([
+    Payments.accounts(client, {
+      address: account.address,
+    }),
+    getWarmStoragePriceList(client),
+  ]);
+
+  const lockupRequired =
+    priceList.lockups.lifecycleReserveTarget +
+    (withCDN ? priceList.lockups.cdnLockupAmount + priceList.lockups.cacheMissLockupAmount : 0n);
+  const requiredFunding = priceList.fees.createDataSetFee + lockupRequired;
+  const depositNeeded = requiredFunding > accountInfo.availableFunds
+    ? requiredFunding - accountInfo.availableFunds
+    : 0n;
+  const needsFwssMaxApproval = !(await Payments.isFwssMaxApproved(client, {
+    clientAddress: account.address,
+    requiredMaxLockupPeriod: priceList.lockups.defaultLockupPeriod,
+  }));
+
+  return {
+    depositNeeded,
+    requiredFunding,
+    createDataSetFee: priceList.fees.createDataSetFee,
+    lockupRequired,
+    needsFwssMaxApproval,
+  };
+};
+
+export const buildStorageCostEstimate = (
   sizeInBytes: number,
   durationInMonths: number,
-  createCDNDataset: boolean = false
-): Promise<StorageCostEstimate> => {
-  // Fetch current pricing from the service using synapse-core
-  const prices = await WarmStorage.getServicePrice(client);
+  priceList: PriceListResult,
+  uploadCosts: UploadCostsResult,
+): StorageCostEstimate => {
+  const pricePerMonth = uploadCosts.rates.perMonth;
+  const oneTimeFees = uploadCosts.fees.total;
+  const totalCost = pricePerMonth * BigInt(durationInMonths) + oneTimeFees;
+  const cdnSetupCost = uploadCosts.lockups.cdnLockup + uploadCosts.lockups.cacheMissLockup;
 
-  const { minimumPricePerMonth, pricePerTiBPerMonthNoCDN } = prices;
-
-  // Calculate monthly cost
-  let pricePerMonth =
-    (pricePerTiBPerMonthNoCDN * BigInt(sizeInBytes)) /
-    BigInt(SIZE_CONSTANTS.TiB);
-
-  const appliedMinimum = pricePerMonth < minimumPricePerMonth;
-
-  if (appliedMinimum) {
-    pricePerMonth = minimumPricePerMonth;
-  }
-
-  // Calculate total cost for the duration
-  let totalCost = pricePerMonth * BigInt(durationInMonths);
-
-  // Add CDN setup cost if needed (1 USDFC)
-  const cdnSetupCost = createCDNDataset ? 10n ** 18n : 0n;
-  totalCost += cdnSetupCost;
-
-  // Format size for display
   const sizeInGiB = Number(sizeInBytes) / Number(SIZE_CONSTANTS.GiB);
   const sizeInTiB = Number(sizeInBytes) / Number(SIZE_CONSTANTS.TiB);
 
@@ -284,9 +379,42 @@ export const estimateStorageCost = async (
       sizeInBytes,
       sizeFormatted,
       durationInMonths,
-      pricePerTiBPerMonth: pricePerTiBPerMonthNoCDN,
-      minimumPricePerMonth,
-      appliedMinimum,
+      storagePerTiBPerMonth: priceList.rates.storagePerTibPerMonth,
+      datasetFeePerMonth: priceList.rates.datasetFeePerMonth,
+      cdnEgressPerTiB: priceList.rates.cdnEgressPerTib,
+      cacheMissEgressPerTiB: priceList.rates.cacheMissEgressPerTib,
+      recurringMonthlyRate: pricePerMonth,
+      createDataSetFee: uploadCosts.fees.createDataSetFee,
+      addPiecesFee: uploadCosts.fees.addPiecesFee,
+      oneTimeFees,
+      lockupRequired: uploadCosts.lockups.total,
+      depositNeeded: uploadCosts.depositNeeded,
+      needsFwssMaxApproval: uploadCosts.needsFwssMaxApproval,
     },
   };
+};
+
+/**
+ * Estimate storage costs for a given size and duration
+ * Based on the Synapse v1 price list:
+ * - Storage: per-TiB monthly rate
+ * - Dataset fee: flat recurring monthly service fee for non-empty datasets
+ * - Upload fees: one-time create-dataset and add-pieces fees
+ * - CDN/cache-miss: usage-based egress rates plus required lockups
+ */
+export const estimateStorageCost = async (
+  sizeInBytes: number,
+  durationInMonths: number,
+  createCDNDataset: boolean = false
+): Promise<StorageCostEstimate> => {
+  const [priceList, uploadCosts] = await Promise.all([
+    getWarmStoragePriceList(client),
+    getUploadCosts(client, {
+      clientAddress: account.address,
+      isNewDataSet: true,
+      withCDN: createCDNDataset,
+      dataSize: BigInt(sizeInBytes),
+    }),
+  ]);
+  return buildStorageCostEstimate(sizeInBytes, durationInMonths, priceList, uploadCosts);
 };

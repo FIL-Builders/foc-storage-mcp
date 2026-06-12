@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { UnifiedSizeInfo } from "../types";
-import { PieceCID, getSize } from "@filoz/synapse-core/piece";
+import { PieceCID } from "@filoz/synapse-core/piece";
 import { SIZE_CONSTANTS } from "@filoz/synapse-core/utils";
 
 // Configure Decimal.js: precision 34 handles Solidity uint256 and wei conversions
@@ -49,7 +49,7 @@ export const tibToBytes = (tib: DecimalLike): Decimal =>
 export const getPieceInfoFromCidBytes = (
   input: PieceCID
 ): UnifiedSizeInfo => {
-  const sizeBytes = BigInt(getSize(input));
+  const sizeBytes = BigInt(input.size);
   return {
     sizeBytes,
     sizeKiB: bytesToKiB(sizeBytes).toNumber(),

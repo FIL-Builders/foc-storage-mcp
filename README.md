@@ -158,9 +158,10 @@ Most MCP tools support this format:
 
 ## Pricing
 
-**Storage:** $2.50/TiB/month (pay-per-epoch: 30 seconds) • Min: $0.06/month
-
-**Example:** 150 GiB for 1 year ≈ 0.44 USDFC ($0.44)
+Pricing is read from the live Synapse v1 price list. Storage is billed per epoch
+(30 seconds) using the per-TiB monthly rate plus a recurring per-dataset service
+fee for non-empty datasets. Uploads can also include one-time create-dataset and
+add-pieces fees, and CDN egress is usage-based.
 
 💡 Ask your agent: _"How much to store 500 GiB for 6 months?"_
 

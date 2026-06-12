@@ -7,13 +7,12 @@ import {
   GetDatasetSchema,
   GetDatasetOutputSchema,
 } from "@/types";
-import { createErrorResponse, serializeBigInt, getExplorerUrl } from "@/lib";
-
-import { env } from "@/config";
+import { createErrorResponse, getExplorerUrl } from "@/lib";
 
 import { getDatasetsService, getDataSetService, createDataSetService } from "@/services/dataset-service";
 import { getProvider as getProviderService } from "@/services";
 import { processPaymentService } from "@/services/payment-service";
+import { estimateDatasetCreationFunding } from "@/services/storage-service";
 
 /**
  * Dataset tools for FOC storage operations.
@@ -42,7 +41,7 @@ export const getDatasets = createTool({
 
       return {
         success: true,
-        datasets: dataSets.map((dataset) => serializeBigInt(dataset)),
+        datasets: dataSets,
         count: dataSets.length,
         message: `Found ${dataSets.length} dataset(s)`,
         progressLog,
@@ -69,7 +68,7 @@ export const getDataset = createTool({
       const dataset = await getDataSetService(Number(context.datasetId));
       return {
         success: true,
-        dataset: serializeBigInt(dataset),
+        dataset,
         message: "Dataset fetched successfully",
       };
     } catch (error) {
@@ -85,7 +84,7 @@ export const getDataset = createTool({
 export const createDataset = createTool({
   id: "createDataset",
   description:
-    "Create a new dataset container on Filecoin for organizing related files with consistent storage settings. Datasets define storage parameters (CDN enabled/disabled, provider selection) that apply to all files added to them. Creating datasets upfront allows for better file organization and consistent retrieval performance. Provider ID is required - use getProviders to list available providers. Payment (1 USDFC) is processed automatically for CDN-enabled datasets. Returns dataset ID, transaction hash, and progress tracking through validation, payment, and creation steps.",
+    "Create a new dataset container on Filecoin for organizing related files with consistent storage settings. Datasets define storage parameters (CDN enabled/disabled, provider selection) that apply to all files added to them. Creating datasets upfront allows for better file organization and consistent retrieval performance. Provider ID is required - use getProviders to list available providers. Required Synapse v1 create-dataset fees, lockups, deposits, and service approval are estimated from the live price list before creation. Returns dataset ID, transaction hash, and progress tracking through validation, funding, and creation steps.",
   inputSchema: CreateDatasetSchema,
   outputSchema: CreateDatasetOutputSchema,
   execute: async ({ context }) => {
@@ -107,18 +106,25 @@ export const createDataset = createTool({
 
     const withCDN = context.withCDN ?? false;
 
-    if (withCDN) {
-      log("Processing CDN payment (1 USDFC)...");
-      const { success, error } = await processPaymentService(BigInt(env.CDN_DATASET_FEE));
+    log("Estimating dataset creation funding requirements...");
+    const funding = await estimateDatasetCreationFunding(withCDN);
+    log(`Create-dataset fee: ${funding.createDataSetFee.toString()} base units`);
+    log(`Required lockup: ${funding.lockupRequired.toString()} base units`);
+
+    if (funding.depositNeeded > 0n || funding.needsFwssMaxApproval) {
+      log(`Processing funding transaction (deposit: ${funding.depositNeeded.toString()} base units, approval needed: ${funding.needsFwssMaxApproval})...`);
+      const { success, error } = await processPaymentService(funding.depositNeeded);
       if (!success) {
         return {
           success: false,
           error: "payment_failed",
-          message: `Failed to process CDN payment (1 USDFC required): ${error}. Use processPayment tool to add funds first.`,
+          message: `Failed to prepare dataset creation funding: ${error}. Use processPayment tool to add funds first.`,
           progressLog,
         };
       }
-      log("CDN payment processed successfully");
+      log("Dataset creation funding transaction confirmed");
+    } else {
+      log("Storage account already has sufficient funds and service approval");
     }
 
     log("Creating dataset on blockchain...");
@@ -147,4 +153,3 @@ export const datasetTools = {
   getDatasets,
   createDataset,
 };
-

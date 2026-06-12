@@ -50,9 +50,14 @@ export const uploadFile = createTool({
 
       // PHASE 4: Balance check
       log("Checking storage balance...");
+      const isExistingDataset = context.datasetId !== undefined;
       const storageMetrics = await checkStorageBalance(
         fileInfo.size,
-        env.PERSISTENCE_PERIOD_DAYS
+        env.PERSISTENCE_PERIOD_DAYS,
+        {
+          isNewDataSet: !isExistingDataset,
+          withCDN: context.withCDN || false,
+        },
       );
 
       // PHASE 5: Auto-payment if needed
@@ -89,7 +94,6 @@ export const uploadFile = createTool({
       // PHASE 6: Storage service creation
       log("Creating storage service...");
 
-      const isExistingDataset = context.datasetId !== undefined;
       const storageService = await synapse.storage.createContext({
         dataSetId: context.datasetId ? BigInt(context.datasetId) : undefined,
         withCDN: context.withCDN || false,

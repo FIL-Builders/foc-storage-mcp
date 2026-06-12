@@ -9,28 +9,29 @@ import { getPiecesWithMetadata } from "@filoz/synapse-core/pdp-verifier";
 import { createDataSet, waitForCreateDataSet } from "@filoz/synapse-core/sp";
 import type { MetadataObject } from "@filoz/synapse-core/utils";
 import { synapseErrorHandler } from "@/lib/errors";
+import { serializeBigInt } from "@/lib/serialize";
+import type { JsonValue, McpDataset, McpDatasetPiece } from "@/types";
 
-export interface DatasetPiece {
-  id: bigint;
-  url: string;
-  metadata: MetadataObject;
-  cid: string;
-}
-
-export type DatasetWithPieces = PdpDataSet & { pieces: DatasetPiece[] };
-
-const fetchDatasetPieces = async (dataset: PdpDataSet): Promise<DatasetPiece[]> => {
+const fetchDatasetPieces = async (dataset: PdpDataSet): Promise<McpDatasetPiece[]> => {
   const { pieces } = await getPiecesWithMetadata(publicClient, {
     dataSet: dataset,
     address: account.address,
   });
   return pieces.map((piece) => ({
-    id: piece.id,
+    id: piece.id.toString(),
     url: piece.url,
-    metadata: piece.metadata,
+    metadata: serializeBigInt(piece.metadata) as Record<string, JsonValue>,
     cid: piece.cid.toString(),
   }));
 };
+
+export const toMcpDataset = (
+  dataset: PdpDataSet,
+  pieces: McpDatasetPiece[],
+): McpDataset => serializeBigInt({
+  ...dataset,
+  pieces,
+}) as unknown as McpDataset;
 
 /**
  * Retrieves all datasets owned by the account with their pieces and metadata
@@ -41,7 +42,7 @@ const fetchDatasetPieces = async (dataset: PdpDataSet): Promise<DatasetPiece[]> 
 export const getDatasetsService = async (
   withCDN: boolean = false,
   includeAll: boolean = false,
-) => {
+) : Promise<McpDataset[]> => {
   const dataSets = (
     await getPdpDataSets(publicClient, {
       address: account.address,
@@ -49,10 +50,9 @@ export const getDatasetsService = async (
   ).filter((dataset: PdpDataSet) => includeAll || (withCDN && dataset.cdn));
 
   return Promise.all(
-    dataSets.map(async (dataset: PdpDataSet) => ({
-      ...dataset,
-      pieces: await fetchDatasetPieces(dataset),
-    })),
+    dataSets.map(async (dataset: PdpDataSet) =>
+      toMcpDataset(dataset, await fetchDatasetPieces(dataset)),
+    ),
   );
 };
 
@@ -61,17 +61,14 @@ export const getDatasetsService = async (
  * @param datasetId Dataset identifier
  * @returns Dataset with pieces and metadata
  */
-export const getDataSetService = async (datasetId: number) => {
+export const getDataSetService = async (datasetId: number): Promise<McpDataset> => {
   const dataset = await getPdpDataSet(publicClient, {
     dataSetId: BigInt(datasetId),
   });
   if (!dataset) {
     throw new Error(`Dataset ${datasetId} not found`);
   }
-  return {
-    ...dataset,
-    pieces: await fetchDatasetPieces(dataset),
-  };
+  return toMcpDataset(dataset, await fetchDatasetPieces(dataset));
 };
 
 /**

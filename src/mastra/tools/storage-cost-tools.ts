@@ -2,7 +2,6 @@ import { createTool } from "@mastra/core";
 import { z } from "zod";
 import { estimateStorageCost } from "@/services/storage-service";
 import { SIZE_CONSTANTS } from "@filoz/synapse-core/utils";
-import { CDN_EGRESS_RATE_PER_TIB } from "@/config";
 
 /**
  * Schema for storage cost estimation input
@@ -43,16 +42,24 @@ const EstimateStorageCostOutputSchema = z.object({
   totalCost: z.string().optional()
     .describe('Total storage cost for duration in USDFC (includes CDN setup if applicable)'),
   cdnSetupCost: z.string().optional()
-    .describe('One-time CDN setup cost in USDFC (if createCDNDataset is true)'),
+    .describe('Legacy field: v1 CDN/cache-miss lockup required in USDFC when createCDNDataset is true'),
   cdnEgressCredits: z.string().optional()
-    .describe('CDN egress credits topped up (in GiB) with the 1 USDFC setup cost'),
+    .describe('Approximate CDN egress capacity per 1 USDFC prepaid balance'),
   details: z.object({
     sizeInBytes: z.number(),
     sizeFormatted: z.string().describe('Human-readable size (e.g., "1.50 GiB")'),
     durationInMonths: z.number(),
-    pricePerTiBPerMonth: z.string(),
-    minimumPricePerMonth: z.string(),
-    appliedMinimum: z.boolean().describe('Whether minimum pricing was applied (for storage < 24.567 GiB)'),
+    storagePerTiBPerMonth: z.string(),
+    datasetFeePerMonth: z.string(),
+    cdnEgressPerTiB: z.string(),
+    cacheMissEgressPerTiB: z.string(),
+    recurringMonthlyRate: z.string(),
+    createDataSetFee: z.string(),
+    addPiecesFee: z.string(),
+    oneTimeFees: z.string(),
+    lockupRequired: z.string(),
+    depositNeeded: z.string(),
+    needsFwssMaxApproval: z.boolean(),
   }).optional(),
   breakdown: z.string().optional()
     .describe('Human-readable cost breakdown'),
@@ -68,16 +75,16 @@ const EstimateStorageCostOutputSchema = z.object({
 /**
  * Storage cost calculator tool for FOC storage operations.
  *
- * Calculates storage costs based on Filecoin OnchainCloud pricing:
- * - Storage: $2.50/TiB/month
- * - Minimum: $0.06/month (for storage < 24.567 GiB)
- * - CDN Setup: 1 USDFC one-time (only for new CDN datasets)
+ * Calculates storage costs based on Synapse v1 Filecoin OnchainCloud pricing:
+ * - Storage: live per-TiB monthly rate
+ * - Dataset fee: a flat recurring per-dataset service fee from the v1 price list
+ * - Upload fees: one-time create-dataset and add-pieces fees from the v1 price list
  * - Epochs: 30 seconds each
  */
 export const estimateStoragePricing = createTool({
   id: "estimateStoragePricing",
   description:
-    "Calculate storage costs for Filecoin OnchainCloud and explain pricing models. Provides: (1) Cost estimates with monthly/total breakdowns, (2) Comprehensive explanation of storage pricing (pay-per-epoch, $2.50/TiB/month, $0.06 minimum), (3) CDN egress pricing details ($14/TiB downloads, 1 USDFC = ~73 GiB credits). ⚠️ CRITICAL: When explaining budgeting, ALWAYS warn that storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service. Recommend maintaining at least 45 days of balance for safety margin. Use when users ask about storage costs, pricing models, CDN fees, or need to budget for storage. Clarifies that CDN 1 USDFC is NOT a fee but pre-paid egress credits that can be topped up anytime.",
+    "Calculate storage costs for Filecoin OnchainCloud and explain Synapse v1 pricing. Provides: (1) recurring monthly/total breakdowns, (2) one-time create-dataset/add-pieces fees, (3) lockup and deposit readiness, and (4) CDN egress pricing from the live price list. ⚠️ CRITICAL: When explaining budgeting, ALWAYS warn that storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service. Recommend maintaining at least 45 days of balance for safety margin. Use when users ask about storage costs, pricing models, CDN fees, or need to budget for storage.",
   inputSchema: EstimateStorageCostSchema,
   outputSchema: EstimateStorageCostOutputSchema,
   execute: async ({ context }) => {
@@ -101,9 +108,10 @@ export const estimateStoragePricing = createTool({
         createCDNDataset
       );
 
-      // Calculate CDN egress credits (1 USDFC = ~73 GiB at $14/TiB rate)
-      // 1 USDFC buys (1/CDN_EGRESS_RATE_PER_TIB) * 1024 GiB = ~73.14 GiB of egress
-      const cdnEgressCreditsGiB = createCDNDataset ? (1 / CDN_EGRESS_RATE_PER_TIB) * 1024 : 0;
+      const cdnEgressRatePerTiB = Number(estimate.details.cdnEgressPerTiB) / 1e18;
+      const cdnEgressCreditsGiB = createCDNDataset && cdnEgressRatePerTiB > 0
+        ? (1 / cdnEgressRatePerTiB) * 1024
+        : 0;
 
       // Create a human-readable breakdown
       const breakdown = [
@@ -113,26 +121,23 @@ export const estimateStoragePricing = createTool({
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
         `Monthly Storage Cost: ${Number(estimate.monthlyCost) / 1e18} USDFC`,
-        `Total Storage Cost: ${Number(estimate.totalCost - estimate.cdnSetupCost) / 1e18} USDFC`,
+        `Recurring Storage Cost: ${Number(estimate.monthlyCost * BigInt(durationInMonths)) / 1e18} USDFC`,
+        `One-time Upload Fees: ${Number(estimate.details.oneTimeFees) / 1e18} USDFC`,
       ];
 
-      if (createCDNDataset && estimate.cdnSetupCost > 0n) {
+      if (createCDNDataset) {
         breakdown.push(``);
-        breakdown.push(`CDN Egress Credits Top-up: ${estimate.cdnSetupCostFormatted} USDFC`);
-        breakdown.push(`  → Provides ~${cdnEgressCreditsGiB.toFixed(2)} GiB of egress credits`);
-        breakdown.push(`  → You can top up more credits anytime`);
+        breakdown.push(`CDN/Cache-miss Lockup Required: ${estimate.cdnSetupCostFormatted} USDFC`);
+        breakdown.push(`  → CDN egress is usage-based at ${cdnEgressRatePerTiB} USDFC/TiB`);
+        breakdown.push(`  → 1 USDFC of prepaid balance covers ~${cdnEgressCreditsGiB.toFixed(2)} GiB of CDN egress`);
         breakdown.push(``);
-        breakdown.push(`Grand Total (Storage + CDN Credits): ${estimate.totalCostFormatted} USDFC`);
+        breakdown.push(`Grand Total (Recurring Storage + Upload Fees): ${estimate.totalCostFormatted} USDFC`);
       }
 
       breakdown.push(``);
       breakdown.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-      if (estimate.details.appliedMinimum) {
-        breakdown.push(
-          `Note: Minimum pricing of $0.06/month applied (storage < ~24.567 GiB)`
-        );
-      }
+      breakdown.push(`Note: Synapse v1 pricing includes a flat per-dataset monthly service fee for non-empty datasets.`);
 
       // Pricing explanation
       const pricingExplanation = [
@@ -142,13 +147,14 @@ export const estimateStoragePricing = createTool({
         ``,
         `Storage operates on a pay-per-epoch model (epochs are 30 seconds):`,
         ``,
-        `1. BASE RATE: $2.50 per TiB per month`,
-        `   - Calculated per epoch: (size / TiB) × $2.50/month ÷ epochs_per_month`,
-        `   - You pay only for the storage space you use`,
+        `1. BASE RATE: Storage per TiB per month from the live Synapse v1 price list`,
+        `   - Calculated per epoch: (size / TiB) × storage rate ÷ epochs_per_month`,
+        `   - Recurring display cost also includes the v1 per-dataset monthly service fee`,
         ``,
-        `2. MINIMUM CHARGE: $0.06 per month`,
-        `   - Applies to storage < ~24.567 GiB`,
-        `   - Ensures service sustainability for small datasets`,
+        `2. ONE-TIME UPLOAD FEES:`,
+        `   - New datasets pay the create-dataset fee`,
+        `   - Uploads pay add-pieces base/per-piece fees`,
+        `   - CDN datasets may require CDN/cache-miss lockup in addition to recurring storage`,
         ``,
         `3. PAYMENT MODEL:`,
         `   - Deposit USDFC tokens into your account`,
@@ -179,20 +185,19 @@ export const estimateStoragePricing = createTool({
         ``,
         `CDN enables fast file retrieval with egress (download) charges:`,
         ``,
-        `1. EGRESS RATE: $14 per TiB downloaded`,
-        `   - ~$0.0137 per GiB downloaded`,
+        `1. EGRESS RATE: ${cdnEgressRatePerTiB} USDFC per TiB downloaded`,
+        `   - Live rate from the Synapse v1 price list`,
         `   - Only pay for actual data transferred`,
         ``,
         `2. CDN CREDITS TOP-UP (Not a Fee!):`,
-        `   - Creating a new CDN dataset requires 1 USDFC top-up`,
-        `   - This is NOT a fee - it's pre-paid egress credits`,
-        `   - 1 USDFC = ~73.14 GiB of download credits`,
+        `   - CDN egress uses prepaid account balance`,
+        `   - 1 USDFC currently covers ~${cdnEgressCreditsGiB.toFixed(2)} GiB at the live price-list rate`,
         `   - Credits are deducted as files are downloaded`,
         ``,
         `3. REUSING DATASETS:`,
-        `   - Adding files to existing CDN dataset = NO additional top-up`,
-        `   - Only the first dataset creation requires the 1 USDFC top-up`,
-        `   - Your egress credits work across all your CDN datasets`,
+        `   - Adding files to existing CDN datasets still uses usage-based egress billing`,
+        `   - Existing datasets avoid new create-dataset fees`,
+        `   - Your prepaid account balance can fund egress across datasets`,
         ``,
         `4. TOPPING UP CREDITS:`,
         `   - Top up anytime to avoid running out`,
@@ -200,9 +205,8 @@ export const estimateStoragePricing = createTool({
         `   - No expiration on credits`,
         ``,
         `5. EXAMPLE CALCULATIONS:`,
-        `   - 1 USDFC → ~73 GiB of downloads`,
-        `   - 14 USDFC → ~1 TiB of downloads`,
-        `   - 140 USDFC → ~10 TiB of downloads`,
+        `   - 1 USDFC → ~${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads`,
+        `   - ${cdnEgressRatePerTiB} USDFC → ~1 TiB of downloads`,
         ``,
         `6. WHEN TO USE CDN:`,
         `   - Frequently accessed files`,
@@ -217,16 +221,24 @@ export const estimateStoragePricing = createTool({
         monthlyCost: (Number(estimate.monthlyCost) / 1e18).toString(),
         totalCost: estimate.totalCostFormatted,
         cdnSetupCost: estimate.cdnSetupCostFormatted,
-        cdnEgressCredits: createCDNDataset ? `${cdnEgressCreditsGiB.toFixed(2)} GiB (~${(cdnEgressCreditsGiB / 1024).toFixed(4)} TiB)` : '0 GiB',
+        cdnEgressCredits: createCDNDataset ? `${cdnEgressCreditsGiB.toFixed(2)} GiB (~${(cdnEgressCreditsGiB / 1024).toFixed(4)} TiB) per 1 USDFC prepaid balance` : '0 GiB',
         details: {
           ...estimate.details,
-          pricePerTiBPerMonth: estimate.details.pricePerTiBPerMonth.toString(),
-          minimumPricePerMonth: estimate.details.minimumPricePerMonth.toString(),
+          storagePerTiBPerMonth: estimate.details.storagePerTiBPerMonth.toString(),
+          datasetFeePerMonth: estimate.details.datasetFeePerMonth.toString(),
+          cdnEgressPerTiB: estimate.details.cdnEgressPerTiB.toString(),
+          cacheMissEgressPerTiB: estimate.details.cacheMissEgressPerTiB.toString(),
+          recurringMonthlyRate: estimate.details.recurringMonthlyRate.toString(),
+          createDataSetFee: estimate.details.createDataSetFee.toString(),
+          addPiecesFee: estimate.details.addPiecesFee.toString(),
+          oneTimeFees: estimate.details.oneTimeFees.toString(),
+          lockupRequired: estimate.details.lockupRequired.toString(),
+          depositNeeded: estimate.details.depositNeeded.toString(),
         },
         breakdown: breakdown.join('\n'),
         pricingExplanation,
         cdnPricingExplanation,
-        message: `Estimated cost: ${estimate.totalCostFormatted} USDFC for ${estimate.details.sizeFormatted} over ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''}${createCDNDataset ? ' (includes 1 USDFC CDN egress credits top-up = ~' + cdnEgressCreditsGiB.toFixed(2) + ' GiB of downloads)' : ''}`,
+        message: `Estimated cost: ${estimate.totalCostFormatted} USDFC for ${estimate.details.sizeFormatted} over ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''}${createCDNDataset ? ' (CDN egress billed separately from prepaid balance; 1 USDFC covers ~' + cdnEgressCreditsGiB.toFixed(2) + ' GiB at current rates)' : ''}`,
       };
     } catch (error) {
       return {
@@ -355,17 +367,17 @@ export const getStoragePricingInfo = createTool({
     pricingOverview: z.string().optional(),
     storageModel: z.object({
       baseRate: z.string(),
-      minimumCharge: z.string(),
-      minimumThreshold: z.string(),
+      datasetFee: z.string(),
+      uploadFees: z.string(),
       epochDuration: z.string(),
       epochsPerDay: z.number(),
       epochsPerMonth: z.number(),
     }).optional(),
     cdnModel: z.object({
       egressRate: z.string(),
-      creditsTopUp: z.string(),
+      lockupRequired: z.string(),
       creditsPerUSDFC: z.string(),
-      isTopUpAFee: z.boolean(),
+      isUsageBased: z.boolean(),
       canTopUpMore: z.boolean(),
     }).optional(),
     exampleCalculation: z.object({
@@ -397,7 +409,11 @@ export const getStoragePricingInfo = createTool({
         includeCDNExample
       );
 
-      const cdnEgressCreditsGiB = includeCDNExample ? (1 / CDN_EGRESS_RATE_PER_TIB) * 1024 : 0;
+      const cdnEgressRatePerTiB = Number(estimate.details.cdnEgressPerTiB) / 1e18;
+      const cdnEgressCreditsGiB = includeCDNExample && cdnEgressRatePerTiB > 0
+        ? (1 / cdnEgressRatePerTiB) * 1024
+        : 0;
+      const recurringStorageCost = estimate.monthlyCost * BigInt(exampleDurationMonths);
 
       const pricingOverview = [
         `FILECOIN ONCHAINCLOUD STORAGE PRICING`,
@@ -409,24 +425,24 @@ export const getStoragePricingInfo = createTool({
         `COST COMPONENTS:`,
         `  • Storage: Pay per epoch (30-second intervals) for stored data`,
         `  • CDN Egress: Pay per TiB downloaded (optional, for fast retrieval)`,
-        `  • No hidden fees, no minimum contracts, no lock-in periods`,
+        `  • Upload fees and lockups are shown separately from recurring storage`,
         ``,
       ].join('\n');
 
       const storageModel = {
-        baseRate: "$2.50 per TiB per month",
-        minimumCharge: "$0.06 per month",
-        minimumThreshold: "~24.567 GiB (applies to storage smaller than this)",
+        baseRate: `${Number(estimate.details.storagePerTiBPerMonth) / 1e18} USDFC per TiB per month`,
+        datasetFee: `${Number(estimate.details.datasetFeePerMonth) / 1e18} USDFC per non-empty dataset per month`,
+        uploadFees: `${Number(estimate.details.oneTimeFees) / 1e18} USDFC for the example create-dataset/add-pieces operation`,
         epochDuration: "30 seconds",
         epochsPerDay: 2880,
         epochsPerMonth: 86400, // 30 days
       };
 
       const cdnModel = includeCDNExample ? {
-        egressRate: "$14 per TiB downloaded (~$0.0137 per GiB)",
-        creditsTopUp: "1 USDFC required when creating first CDN dataset",
-        creditsPerUSDFC: "~73.14 GiB of egress credits",
-        isTopUpAFee: false,
+        egressRate: `${cdnEgressRatePerTiB} USDFC per TiB downloaded`,
+        lockupRequired: `${estimate.cdnSetupCostFormatted} USDFC CDN/cache-miss lockup for the example`,
+        creditsPerUSDFC: `~${cdnEgressCreditsGiB.toFixed(2)} GiB of egress per 1 USDFC prepaid balance`,
+        isUsageBased: true,
         canTopUpMore: true,
       } : undefined;
 
@@ -438,37 +454,39 @@ export const getStoragePricingInfo = createTool({
         `Duration: 12 months (1 year)`,
         ``,
         `STORAGE COSTS:`,
-        `  Base Rate: $2.50/TiB/month`,
-        `  Calculation: 1 TiB × $2.50/month × 12 months`,
+        `  Base Rate: ${Number(estimate.details.storagePerTiBPerMonth) / 1e18} USDFC/TiB/month`,
+        `  Dataset Fee: ${Number(estimate.details.datasetFeePerMonth) / 1e18} USDFC/month`,
+        `  Calculation: recurring monthly rate × 12 months`,
         `  Monthly Cost: ${(Number(estimate.monthlyCost) / 1e18).toFixed(4)} USDFC`,
-        `  Yearly Storage: ${(Number(estimate.totalCost - estimate.cdnSetupCost) / 1e18).toFixed(4)} USDFC`,
+        `  Yearly Recurring Storage: ${(Number(recurringStorageCost) / 1e18).toFixed(4)} USDFC`,
+        `  One-time Upload Fees: ${(Number(estimate.details.oneTimeFees) / 1e18).toFixed(4)} USDFC`,
         ``,
       ];
 
       if (includeCDNExample) {
         exampleBreakdown.push(
-          `CDN EGRESS CREDITS (Optional):`,
-          `  Initial Top-up: 1.0 USDFC (pre-paid credits, NOT a fee)`,
-          `  Provides: ~${cdnEgressCreditsGiB.toFixed(2)} GiB of download credits`,
-          `  Reusing dataset: No additional top-up required`,
-          `  Additional top-ups: Available anytime`,
+          `CDN EGRESS (Optional):`,
+          `  Egress Rate: ${cdnEgressRatePerTiB} USDFC/TiB`,
+          `  1 USDFC prepaid balance provides: ~${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads`,
+          `  CDN/cache-miss lockup required: ${estimate.cdnSetupCostFormatted} USDFC`,
+          `  Additional prepaid balance can be added anytime`,
           ``,
         );
       }
 
       exampleBreakdown.push(
         `TOTAL COST:`,
-        `  Storage (12 months): ${(Number(estimate.totalCost - estimate.cdnSetupCost) / 1e18).toFixed(4)} USDFC`,
+        `  Recurring storage (12 months): ${(Number(recurringStorageCost) / 1e18).toFixed(4)} USDFC`,
+        `  One-time upload fees: ${(Number(estimate.details.oneTimeFees) / 1e18).toFixed(4)} USDFC`,
       );
 
       if (includeCDNExample) {
         exampleBreakdown.push(
-          `  CDN Credits Top-up: ${estimate.cdnSetupCostFormatted} USDFC`,
+          `  CDN/cache-miss lockup: ${estimate.cdnSetupCostFormatted} USDFC`,
           `  ────────────────────`,
-          `  Grand Total: ${estimate.totalCostFormatted} USDFC`,
+          `  Grand Total excluding refundable lockup: ${estimate.totalCostFormatted} USDFC`,
           ``,
-          `Note: The CDN top-up gives you ${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads.`,
-          `      If you download your 1 TiB once, you'd need ~14 USDFC more in credits.`,
+          `Note: CDN egress is charged from prepaid balance as data is downloaded.`,
         );
       } else {
         exampleBreakdown.push(
@@ -528,14 +546,14 @@ export const getStoragePricingInfo = createTool({
           size: "1 TiB (1,099,511,627,776 bytes)",
           duration: "12 months (1 year)",
           monthlyCost: `${(Number(estimate.monthlyCost) / 1e18).toFixed(4)} USDFC`,
-          yearlyStorageCost: `${(Number(estimate.totalCost - estimate.cdnSetupCost) / 1e18).toFixed(4)} USDFC`,
-          cdnTopUp: includeCDNExample ? estimate.cdnSetupCostFormatted + " USDFC" : undefined,
-          cdnEgressCredits: includeCDNExample ? `~${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads` : undefined,
+          yearlyStorageCost: `${(Number(recurringStorageCost) / 1e18).toFixed(4)} USDFC`,
+          cdnTopUp: includeCDNExample ? estimate.cdnSetupCostFormatted + " USDFC lockup" : undefined,
+          cdnEgressCredits: includeCDNExample ? `~${cdnEgressCreditsGiB.toFixed(2)} GiB of downloads per 1 USDFC prepaid balance` : undefined,
           totalCost: estimate.totalCostFormatted + " USDFC",
           breakdown: exampleBreakdown.join('\n'),
         },
         paymentModel,
-        message: `Storage pricing: $2.50/TiB/month (minimum $0.06/month). Example: 1 TiB for 1 year = ${estimate.totalCostFormatted} USDFC${includeCDNExample ? ' (includes 1 USDFC CDN credits = ~' + cdnEgressCreditsGiB.toFixed(2) + ' GiB downloads)' : ''}`,
+        message: `Storage pricing uses the live Synapse v1 price list. Example: 1 TiB for 1 year = ${estimate.totalCostFormatted} USDFC excluding refundable lockup${includeCDNExample ? ' (CDN egress: 1 USDFC prepaid balance covers ~' + cdnEgressCreditsGiB.toFixed(2) + ' GiB at current rates)' : ''}`,
       };
     } catch (error) {
       return {

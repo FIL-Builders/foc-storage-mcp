@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { env } from '@/config';
 import { SIZE_CONSTANTS } from '@filoz/synapse-core/utils';
-import { DataSetWithPieces } from '@filoz/synapse-react';
+import type { McpDataset } from './core';
 import { PDPProvider } from '@filoz/synapse-core/sp-registry';
 // Dataset tools schemas
 export const GetDatasetsSchema = z.object({
@@ -119,6 +119,17 @@ export const DataSetSchema = z.object({
   dataSetPieces: z.array(DataSetPieceSchema),
 });
 
+export const McpDatasetPieceSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  metadata: z.record(z.unknown()),
+  cid: z.string(),
+});
+
+export const McpDatasetSchema = z.object({
+  pieces: z.array(McpDatasetPieceSchema),
+}).catchall(z.unknown()) as z.ZodType<McpDataset>;
+
 export const StorageBalanceResultSchema = z.object({
   filBalance: z.bigint(),
   usdfcBalance: z.bigint(),
@@ -141,8 +152,8 @@ export const StorageBalanceResultSerializedSchema = z.object({
   availableStorageFundsUsdfc: z.string(),
   depositNeeded: z.string(),
   availableToFreeUp: z.string(),
-  daysLeftAtMaxBurnRate: z.number(),
-  daysLeftAtBurnRate: z.number(),
+  daysLeftAtMaxBurnRate: z.union([z.number(), z.literal("Infinity")]),
+  daysLeftAtBurnRate: z.union([z.number(), z.literal("Infinity")]),
   isRateSufficient: z.boolean(),
   isLockupSufficient: z.boolean(),
   isSufficient: z.boolean(),
@@ -241,7 +252,7 @@ export const GetBalancesOutputSchema = z.object({
 export const GetDatasetsOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  datasets: z.array(z.custom<DataSetWithPieces>()).optional(),
+  datasets: z.array(McpDatasetSchema).optional(),
   count: z.number().optional(),
   progressLog: z.array(z.string()).optional(),
   // Error fields
@@ -253,7 +264,7 @@ export const GetDatasetsOutputSchema = z.object({
 export const GetDatasetOutputSchema = z.object({
   success: z.boolean(),
   // Success fields
-  dataset: z.custom<DataSetWithPieces>().optional(),
+  dataset: McpDatasetSchema.optional(),
   // Error fields
   error: z.string().optional(),
   // Common field
