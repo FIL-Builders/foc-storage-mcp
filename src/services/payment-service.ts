@@ -2,8 +2,9 @@
  * Shared payment service for FOC storage operations
  */
 
-import { client } from './viem';
+import { account, client } from './viem';
 import * as Payments from '@filoz/synapse-core/pay';
+import { getPriceList as getWarmStoragePriceList } from '@filoz/synapse-core/warm-storage';
 import { waitForTransactionReceipt } from 'viem/actions';
 import { synapseErrorHandler } from '../lib/errors';
 export interface PaymentResult {
@@ -26,6 +27,18 @@ export async function processPaymentService(
 ): Promise<PaymentResult> {
 
   try {
+    if (depositAmount === 0n) {
+      const priceList = await getWarmStoragePriceList(client);
+      const needsFwssMaxApproval = !(await Payments.isFwssMaxApproved(client, {
+        clientAddress: account.address,
+        requiredMaxLockupPeriod: priceList.lockups.defaultLockupPeriod,
+      }));
+
+      if (!needsFwssMaxApproval) {
+        return { txHash: null, success: true };
+      }
+    }
+
     const hash = await Payments.fund(client, {
       amount: BigInt(depositAmount),
     });

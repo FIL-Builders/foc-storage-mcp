@@ -16,7 +16,7 @@ export const getProviders = async () => {
  * @param providerId Provider identifier
  * @returns Provider details with serialized BigInt values
  */
-export const getProvider = async (providerId: bigint | number) => {
+export const getProvider = async (providerId: bigint | number | string) => {
     const provider = await getPDPProvider(publicClient, {
         providerId: BigInt(providerId),
     });
@@ -30,7 +30,7 @@ export const getProvider = async (providerId: bigint | number) => {
  * Retrieves the raw provider record (BigInt fields preserved)
  * @param providerId Provider identifier
  */
-export const getProviderRaw = async (providerId: bigint | number) => {
+export const getProviderRaw = async (providerId: bigint | number | string) => {
     const provider = await getPDPProvider(publicClient, {
         providerId: BigInt(providerId),
     });

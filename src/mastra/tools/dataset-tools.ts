@@ -10,7 +10,7 @@ import {
 import { createErrorResponse, getExplorerUrl } from "@/lib";
 
 import { getDatasetsService, getDataSetService, createDataSetService } from "@/services/dataset-service";
-import { getProvider as getProviderService } from "@/services";
+import { getProviderRaw as getProviderService } from "@/services";
 import { processPaymentService } from "@/services/payment-service";
 import { estimateDatasetCreationFunding } from "@/services/storage-service";
 
@@ -29,7 +29,7 @@ export const getDatasets = createTool({
 
     try {
       const withCDN = context.filterByCDN ?? false;
-      const includeAll = context.includeAllDatasets ?? false;
+      const includeAll = context.includeAllDatasets ?? true;
 
       log("Fetching datasets from blockchain...");
       const dataSets = await getDatasetsService(withCDN, includeAll);
@@ -65,7 +65,7 @@ export const getDataset = createTool({
   outputSchema: GetDatasetOutputSchema,
   execute: async ({ context }) => {
     try {
-      const dataset = await getDataSetService(Number(context.datasetId));
+      const dataset = await getDataSetService(context.datasetId);
       return {
         success: true,
         dataset,
@@ -91,60 +91,68 @@ export const createDataset = createTool({
     const progressLog: string[] = [];
     const log = (msg: string) => { progressLog.push(msg); };
 
-    if (!context.providerId) {
-      return {
-        success: false,
-        error: "provider_id_required",
-        message: "Provider ID is required. Use getProviders tool to list available providers and select one by ID.",
-        progressLog,
-      };
-    }
-
-    log("Validating provider ID...");
-    const provider = await getProviderService(Number(context.providerId));
-    log(`Provider validated (ID: ${context.providerId})`);
-
-    const withCDN = context.withCDN ?? false;
-
-    log("Estimating dataset creation funding requirements...");
-    const funding = await estimateDatasetCreationFunding(withCDN);
-    log(`Create-dataset fee: ${funding.createDataSetFee.toString()} base units`);
-    log(`Required lockup: ${funding.lockupRequired.toString()} base units`);
-
-    if (funding.depositNeeded > 0n || funding.needsFwssMaxApproval) {
-      log(`Processing funding transaction (deposit: ${funding.depositNeeded.toString()} base units, approval needed: ${funding.needsFwssMaxApproval})...`);
-      const { success, error } = await processPaymentService(funding.depositNeeded);
-      if (!success) {
+    try {
+      if (!context.providerId) {
         return {
           success: false,
-          error: "payment_failed",
-          message: `Failed to prepare dataset creation funding: ${error}. Use processPayment tool to add funds first.`,
+          error: "provider_id_required",
+          message: "Provider ID is required. Use getProviders tool to list available providers and select one by ID.",
           progressLog,
         };
       }
-      log("Dataset creation funding transaction confirmed");
-    } else {
-      log("Storage account already has sufficient funds and service approval");
-    }
 
-    log("Creating dataset on blockchain...");
-    const result = await createDataSetService(provider, withCDN, context.metadata ?? {});
+      log("Validating provider ID...");
+      const provider = await getProviderService(context.providerId);
+      log(`Provider validated (ID: ${context.providerId})`);
 
-    if (result.success) {
-      log("Dataset created successfully");
-      if (result.txHash) {
-        log(`View transaction: ${getExplorerUrl(result.txHash)}`);
+      const withCDN = context.withCDN ?? false;
+
+      log("Estimating dataset creation funding requirements...");
+      const funding = await estimateDatasetCreationFunding(withCDN);
+      log(`Create-dataset fee: ${funding.createDataSetFee.toString()} base units`);
+      log(`Required lockup: ${funding.lockupRequired.toString()} base units`);
+
+      if (funding.depositNeeded > 0n || funding.needsFwssMaxApproval) {
+        log(`Processing funding transaction (deposit: ${funding.depositNeeded.toString()} base units, approval needed: ${funding.needsFwssMaxApproval})...`);
+        const { success, error } = await processPaymentService(funding.depositNeeded);
+        if (!success) {
+          return {
+            success: false,
+            error: "payment_failed",
+            message: `Failed to prepare dataset creation funding: ${error}. Use processPayment tool to add funds first.`,
+            progressLog,
+          };
+        }
+        log("Dataset creation funding transaction confirmed");
+      } else {
+        log("Storage account already has sufficient funds and service approval");
       }
+
+      log("Creating dataset on blockchain...");
+      const result = await createDataSetService(provider, withCDN, context.metadata ?? {});
+
+      if (result.success) {
+        log("Dataset created successfully");
+        if (result.txHash) {
+          log(`View transaction: ${getExplorerUrl(result.txHash)}`);
+        }
+        return {
+          ...result,
+          progressLog,
+        };
+      }
+
       return {
         ...result,
         progressLog,
       };
+    } catch (error) {
+      return createErrorResponse(
+        "dataset_creation_failed",
+        `Failed to create dataset: ${(error as Error).message}`,
+        { success: false, progressLog }
+      );
     }
-
-    return {
-      ...result,
-      progressLog,
-    };
   },
 });
 

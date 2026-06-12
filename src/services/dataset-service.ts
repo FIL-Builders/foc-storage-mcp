@@ -41,13 +41,13 @@ export const toMcpDataset = (
  */
 export const getDatasetsService = async (
   withCDN: boolean = false,
-  includeAll: boolean = false,
+  includeAll: boolean = true,
 ) : Promise<McpDataset[]> => {
   const dataSets = (
     await getPdpDataSets(publicClient, {
       address: account.address,
     })
-  ).filter((dataset: PdpDataSet) => includeAll || (withCDN && dataset.cdn));
+  ).filter((dataset: PdpDataSet) => includeAll || (withCDN ? dataset.cdn : !dataset.cdn));
 
   return Promise.all(
     dataSets.map(async (dataset: PdpDataSet) =>
@@ -61,7 +61,7 @@ export const getDatasetsService = async (
  * @param datasetId Dataset identifier
  * @returns Dataset with pieces and metadata
  */
-export const getDataSetService = async (datasetId: number): Promise<McpDataset> => {
+export const getDataSetService = async (datasetId: bigint | number | string): Promise<McpDataset> => {
   const dataset = await getPdpDataSet(publicClient, {
     dataSetId: BigInt(datasetId),
   });

@@ -13,7 +13,8 @@ import {
   getPriceList as getWarmStoragePriceList,
   getUploadCosts,
 } from "@filoz/synapse-core/warm-storage";
-import { account, client } from "@/services/viem";
+import { getDataSetSizes } from "@filoz/synapse-core/pdp-verifier";
+import { account, client, publicClient } from "@/services/viem";
 
 type PriceListResult = getPriceList.OutputType;
 type UploadCostsResult = Awaited<ReturnType<typeof getUploadCosts>>;
@@ -60,8 +61,14 @@ export interface StorageBalanceResult {
 export interface StorageBalanceUploadOptions {
   isNewDataSet: boolean;
   withCDN?: boolean;
+  dataSetId?: bigint;
   currentDataSetSize?: bigint;
   pieceCount?: bigint;
+}
+
+export interface CheckStorageBalanceOptions {
+  notificationThresholdDays?: number;
+  upload?: StorageBalanceUploadOptions;
 }
 
 interface StorageBalanceResultFormatted {
@@ -117,6 +124,7 @@ interface StorageBalanceCalculationInput {
   operatorApprovals: Payments.operatorApprovals.OutputType;
   storageCapacityBytes: number;
   persistencePeriodDays: number;
+  notificationThresholdDays?: number;
   uploadCosts?: UploadCostsResult;
 }
 
@@ -128,6 +136,7 @@ export const buildStorageBalanceResult = ({
   operatorApprovals,
   storageCapacityBytes,
   persistencePeriodDays,
+  notificationThresholdDays = env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS,
   uploadCosts,
 }: StorageBalanceCalculationInput): StorageBalanceResult => {
   const storageCosts = calculateStorageCost(priceList, storageCapacityBytes)
@@ -139,10 +148,11 @@ export const buildStorageBalanceResult = ({
   const daysLeftAtMaxBurnRate = maxMonthlyRate === 0n ? Infinity : (Number(availableFunds) / Number(maxMonthlyRate)) * 30;
   const daysLeftAtBurnRate = currentMonthlyRate === 0n ? Infinity : (Number(availableFunds) / Number(currentMonthlyRate)) * 30;
 
-  const amountNeeded = storageCosts.perDay * BigInt(persistencePeriodDays);
+  const fundingPeriodDays = Math.max(persistencePeriodDays, notificationThresholdDays);
+  const amountNeeded = storageCosts.perDay * BigInt(Math.ceil(fundingPeriodDays));
 
   const recurringDepositNeeded =
-    daysLeftAtMaxBurnRate >= env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS
+    daysLeftAtMaxBurnRate >= notificationThresholdDays
       ? 0n
       : amountNeeded > availableFunds ? amountNeeded - availableFunds : 0n;
 
@@ -167,7 +177,7 @@ export const buildStorageBalanceResult = ({
       operatorApprovals.lockupAllowance >= MAX_UINT256 / 2n &&
       operatorApprovals.maxLockupPeriod >= priceList.lockups.defaultLockupPeriod;
 
-  const isRecurringSufficient = daysLeftAtMaxBurnRate >= env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS;
+  const isRecurringSufficient = daysLeftAtMaxBurnRate >= notificationThresholdDays;
   const isSufficient = uploadCosts
     ? uploadCosts.ready && isRecurringSufficient
     : isRateSufficient && isLockupSufficient && isRecurringSufficient;
@@ -188,6 +198,17 @@ export const buildStorageBalanceResult = ({
   };
 };
 
+const getCurrentDataSetSize = async (uploadOptions: StorageBalanceUploadOptions): Promise<bigint | undefined> => {
+  if (uploadOptions.currentDataSetSize !== undefined || uploadOptions.isNewDataSet || uploadOptions.dataSetId === undefined) {
+    return uploadOptions.currentDataSetSize;
+  }
+
+  const [currentDataSetSize] = await getDataSetSizes(publicClient, {
+    dataSetIds: [uploadOptions.dataSetId],
+  });
+  return currentDataSetSize;
+};
+
 /**
  * Checks storage account balance and calculates deposit requirements
  * @param storageCapacityBytes Target storage capacity in bytes (default: 1TB)
@@ -198,17 +219,20 @@ export const buildStorageBalanceResult = ({
 export const checkStorageBalance = async (
   storageCapacityBytes: number = env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB),
   persistencePeriodDays: number = env.PERSISTENCE_PERIOD_DAYS,
-  uploadOptions?: StorageBalanceUploadOptions,
+  options: CheckStorageBalanceOptions = {},
 ): Promise<StorageBalanceResult> => {
+  const uploadOptions = options.upload;
   const uploadCostsPromise = uploadOptions
-    ? getUploadCosts(client, {
-      clientAddress: account.address,
-      dataSize: BigInt(storageCapacityBytes),
-      isNewDataSet: uploadOptions.isNewDataSet,
-      withCDN: uploadOptions.withCDN,
-      currentDataSetSize: uploadOptions.currentDataSetSize,
-      pieceCount: uploadOptions.pieceCount,
-    })
+    ? getCurrentDataSetSize(uploadOptions).then((currentDataSetSize) =>
+      getUploadCosts(client, {
+        clientAddress: account.address,
+        dataSize: BigInt(storageCapacityBytes),
+        isNewDataSet: uploadOptions.isNewDataSet,
+        withCDN: uploadOptions.withCDN,
+        currentDataSetSize,
+        pieceCount: uploadOptions.pieceCount,
+      })
+    )
     : Promise.resolve(undefined);
 
   const [filRaw, { value: usdfcRaw }, { availableFunds }, priceList, operatorApprovals, uploadCosts] = await Promise.all([
@@ -236,6 +260,7 @@ export const checkStorageBalance = async (
     operatorApprovals,
     storageCapacityBytes,
     persistencePeriodDays,
+    notificationThresholdDays: options.notificationThresholdDays,
     uploadCosts,
   });
 };
