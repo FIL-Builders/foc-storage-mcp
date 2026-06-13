@@ -236,3 +236,14 @@ test("tool schemas reject fractional numeric inputs and non-integer IDs", async 
     notificationThresholdDays: 45,
   }).success, true);
 });
+
+test("toBaseUnits handles decimal and scientific notation without rounding", async () => {
+  const { toBaseUnits } = await import("../src/lib");
+
+  assert.equal(toBaseUnits("1", 18), 1_000_000_000_000_000_000n);
+  assert.equal(toBaseUnits("1e-18", 18), 1n);
+  assert.equal(toBaseUnits(1e-18, 18), 1n);
+  assert.equal(toBaseUnits("123456789012345678.123456789012345678", 18), 123456789012345678123456789012345678n);
+  assert.throws(() => toBaseUnits("0.0000000000000000001", 18), /more than 18 decimal places/);
+  assert.throws(() => toBaseUnits("-1", 18), /non-negative finite/);
+});

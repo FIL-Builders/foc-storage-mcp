@@ -66,6 +66,10 @@ export async function processWithdrawalService(
   withdrawalAmount: bigint,
 ): Promise<WithdrawalResult> {
   try {
+    if (withdrawalAmount === 0n) {
+      return { txHash: null, success: true };
+    }
+
     const hash = await Payments.withdraw(client, {
       amount: BigInt(withdrawalAmount),
     });

@@ -21,7 +21,7 @@ export const processPayment = createTool({
     const { depositAmount } = context;
 
     log("Converting amount to base units...");
-    let amount = toBaseUnits(depositAmount.toString(), 18);
+    let amount = toBaseUnits(depositAmount, 18);
 
     let isApprovalOnly = false;
     if (amount === 0n) {
@@ -80,7 +80,23 @@ export const processWithdrawal = createTool({
     const { withdrawalAmount } = context;
 
     log("Converting amount to base units...");
-    const amount = toBaseUnits(withdrawalAmount.toString(), 18);
+    let amount = toBaseUnits(withdrawalAmount, 18);
+
+    if (amount === 0n) {
+      log("No explicit withdrawal amount provided, checking withdrawable storage funds...");
+      const storageBalance = await checkStorageBalance();
+      amount = storageBalance.availableToFreeUp;
+      if (amount === 0n) {
+        log("No withdrawable storage funds available");
+        return {
+          success: true,
+          txHash: null,
+          message: "No withdrawable storage funds are currently available.",
+          progressLog,
+        };
+      }
+      log(`Calculated withdrawable amount: ${fromBaseUnits(amount, 18)} USDFC`);
+    }
 
     log("Initiating withdrawal transaction...");
     const { success, txHash, error } = await processWithdrawalService(amount);
@@ -101,7 +117,7 @@ export const processWithdrawal = createTool({
     return {
       success: true,
       txHash: txHash,
-      message: `Withdrawal processed successfully. You withdrew ${withdrawalAmount} USDFC from your storage account.`,
+      message: `Withdrawal processed successfully. You withdrew ${fromBaseUnits(amount, 18)} USDFC from your storage account.`,
       progressLog,
     };
   },

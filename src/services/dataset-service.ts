@@ -96,7 +96,7 @@ export const createDataSetService = async (
 
     return {
       success: true,
-      dataSetId: dataSetId.toString(),
+      datasetId: dataSetId.toString(),
       txHash: created.txHash,
       message: "Dataset created successfully",
     };
@@ -104,7 +104,7 @@ export const createDataSetService = async (
     return {
       success: false,
       txHash: null,
-      dataSetId: null,
+      datasetId: null,
       message: "Failed to create dataset: " + synapseErrorHandler(error),
     };
   }

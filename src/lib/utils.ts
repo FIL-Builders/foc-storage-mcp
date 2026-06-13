@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import { env } from "@/config";
+import Decimal from "decimal.js";
 
 /**
  * Validates file path exists and returns file info
@@ -41,10 +42,20 @@ export function createErrorResponse(
 /**
  * Convert human-readable amount to wei/smallest unit
  */
-export function toBaseUnits(amount: string, decimals: number = 18): bigint {
-    const [whole, decimal = ""] = amount.split(".");
-    const paddedDecimal = decimal.padEnd(decimals, "0").slice(0, decimals);
-    return BigInt(whole + paddedDecimal);
+export function toBaseUnits(amount: string | number, decimals: number = 18): bigint {
+    const amountString = amount.toString();
+    const significantDigits = amountString.replace(/[^0-9]/g, "").length;
+    const DecimalCtor = Decimal.clone({ precision: Math.max(40, significantDigits + decimals + 5) });
+    const scaled = new DecimalCtor(amountString).mul(new DecimalCtor(10).pow(decimals));
+
+    if (!scaled.isFinite() || scaled.isNegative()) {
+        throw new Error("Amount must be a non-negative finite number");
+    }
+    if (!scaled.isInteger()) {
+        throw new Error(`Amount has more than ${decimals} decimal places`);
+    }
+
+    return BigInt(scaled.toFixed(0));
 }
 
 /**
