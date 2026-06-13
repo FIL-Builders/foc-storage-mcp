@@ -221,6 +221,7 @@ test("tool schemas reject fractional numeric inputs and non-integer IDs", async 
   const {
     CreateDatasetSchema,
     GetBalancesSchema,
+    ProcessWithdrawalSchema,
     UploadFileSchema,
   } = await import("../src/types/schemas");
 
@@ -229,12 +230,31 @@ test("tool schemas reject fractional numeric inputs and non-integer IDs", async 
   assert.equal(GetBalancesSchema.safeParse({ notificationThresholdDays: 0 }).success, false);
   assert.equal(UploadFileSchema.safeParse({ filePath: "/tmp/file.txt", datasetId: "12.5" }).success, false);
   assert.equal(CreateDatasetSchema.safeParse({ providerId: "provider-1" }).success, false);
+  assert.equal(ProcessWithdrawalSchema.safeParse({ withdrawalAmount: 0 }).success, false);
+  assert.equal(ProcessWithdrawalSchema.safeParse({ withdrawalAmount: -1 }).success, false);
 
   assert.equal(GetBalancesSchema.safeParse({
     storageCapacityBytes: 1024,
     persistencePeriodDays: 365,
     notificationThresholdDays: 45,
   }).success, true);
+  assert.equal(ProcessWithdrawalSchema.safeParse({}).success, true);
+  assert.equal(ProcessWithdrawalSchema.safeParse({ withdrawalAmount: 1 }).success, true);
+});
+
+test("processWithdrawal requires an explicit amount before any transaction path", async () => {
+  const { processWithdrawal } = await import("../src/mastra/tools/payment-tools");
+
+  const result = await processWithdrawal.execute({
+    context: {},
+    runtimeContext: new Map(),
+  } as never);
+
+  assert.equal(result.success, false);
+  assert.equal(result.txHash, null);
+  assert.equal(result.error, "withdrawal_amount_required");
+  assert.match(result.message, /Provide withdrawalAmount explicitly/);
+  assert.ok(result.progressLog?.some((entry) => entry.includes("refusing to auto-withdraw")));
 });
 
 test("toBaseUnits handles decimal and scientific notation without rounding", async () => {

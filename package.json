@@ -17,7 +17,8 @@
     "build": "mastra build",
     "start": "mastra start",
     "mcp": "tsx src/mastra/stdio.ts",
-    "start:mcp": "tsx src/mastra/stdio.ts"
+    "start:mcp": "tsx src/mastra/stdio.ts",
+    "smoke:mcp:readonly": "tsx scripts/smoke-mcp-readonly.ts"
   },
   "keywords": [
     "filecoin",
@@ -53,6 +54,7 @@
     "@mastra/loggers": "^0.10.19",
     "@mastra/mcp": "^0.14.2",
     "@mastra/memory": "^0.15.11",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ai": "^5.0.82",
     "axios": "^1.10.0",
     "axios-retry": "^4.5.0",

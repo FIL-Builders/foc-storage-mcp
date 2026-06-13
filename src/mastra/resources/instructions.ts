@@ -69,8 +69,8 @@ BALANCE & PAYMENT:
 
 • processWithdrawal: Withdraw USDFC tokens from the storage account
 
-- Parameters: withdrawalAmount (optional, default: 0)
-- Actions: Withdraws available funds from storage account back to wallet
+- Parameters: withdrawalAmount (required for transactions; omitted amount returns an error and does not transact)
+- Actions: Withdraws the explicit requested amount from storage account back to wallet
 - Reduces storage service allowances and available balance
 - Progress Tracking: Returns progressLog showing conversion, transaction initiation, and confirmation steps
 - Use when: User wants to retrieve unused funds from storage account
