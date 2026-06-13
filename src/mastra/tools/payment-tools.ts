@@ -70,7 +70,7 @@ export const processPayment = createTool({
 export const processWithdrawal = createTool({
   id: "processWithdrawal",
   description:
-    "Withdraw USDFC tokens (not in base units) from the storage account back to your wallet. Reduces storage service allowances and available balance. Use this to retrieve unused funds from the storage account. Returns transaction hash for verification and progress tracking through conversion, initiation, and confirmation steps.",
+    "Withdraw an explicit USDFC amount (not in base units) from the storage account back to your wallet. Reduces storage service allowances and available balance. Use this to retrieve unused funds from the storage account only after the user has chosen a specific amount. Returns transaction hash for verification and progress tracking through conversion, initiation, and confirmation steps.",
   inputSchema: ProcessWithdrawalSchema,
   outputSchema: ProcessWithdrawalOutputSchema,
   execute: async ({ context }) => {
@@ -79,23 +79,29 @@ export const processWithdrawal = createTool({
 
     const { withdrawalAmount } = context;
 
+    if (withdrawalAmount === undefined) {
+      log("No explicit withdrawal amount provided; refusing to auto-withdraw storage funds.");
+      return {
+        success: false,
+        txHash: null,
+        error: "withdrawal_amount_required",
+        message: "Provide withdrawalAmount explicitly in USDFC before processing a withdrawal.",
+        progressLog,
+      };
+    }
+
     log("Converting amount to base units...");
-    let amount = toBaseUnits(withdrawalAmount, 18);
+    const amount = toBaseUnits(withdrawalAmount, 18);
 
     if (amount === 0n) {
-      log("No explicit withdrawal amount provided, checking withdrawable storage funds...");
-      const storageBalance = await checkStorageBalance();
-      amount = storageBalance.availableToFreeUp;
-      if (amount === 0n) {
-        log("No withdrawable storage funds available");
-        return {
-          success: true,
-          txHash: null,
-          message: "No withdrawable storage funds are currently available.",
-          progressLog,
-        };
-      }
-      log(`Calculated withdrawable amount: ${fromBaseUnits(amount, 18)} USDFC`);
+      log("Withdrawal amount converted to zero base units; refusing to send a zero-value withdrawal transaction.");
+      return {
+        success: false,
+        txHash: null,
+        error: "withdrawal_amount_too_small",
+        message: "Withdrawal amount must be greater than zero USDFC base units.",
+        progressLog,
+      };
     }
 
     log("Initiating withdrawal transaction...");

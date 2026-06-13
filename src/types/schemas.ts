@@ -75,8 +75,8 @@ export const ProcessPaymentSchema = z.object({
 });
 
 export const ProcessWithdrawalSchema = z.object({
-  withdrawalAmount: z.number().nonnegative().optional().default(0)
-    .describe('Amount to withdraw in USDFC. Default: 0. If not provided, the tool will check the balance and withdraw the necessary amount.')
+  withdrawalAmount: z.number().positive().optional()
+    .describe('Amount to withdraw in USDFC. Must be provided explicitly; omitted amounts do not trigger a transaction.')
 });
 
 // Provider query schema

@@ -165,6 +165,21 @@ add-pieces fees, and CDN egress is usage-based.
 
 💡 Ask your agent: _"How much to store 500 GiB for 6 months?"_
 
+## Validation
+
+```bash
+npm test
+npx tsc --noEmit
+npm run build:mcp
+npm run smoke:mcp:readonly
+npm run build
+```
+
+`smoke:mcp:readonly` starts the built stdio server and exercises read-only MCP
+tools for pricing, providers, balances, and datasets. It deliberately skips
+upload, payment, withdrawal, and dataset-creation transactions; run those only
+with an intentionally funded Calibration wallet.
+
 ## Tools
 
 Ask naturally in Claude, Cursor, or any MCP client:
