@@ -145,6 +145,13 @@ test("buildStorageBalanceResult includes Synapse v1 upload deposit and approval 
   assert.equal(recurringOnly.depositNeeded, 0n);
   assert.equal(recurringOnly.isSufficient, true);
 
+  const strictThreshold = buildStorageBalanceResult({
+    ...baseInput,
+    notificationThresholdDays: 120,
+  });
+  assert.ok(strictThreshold.depositNeeded > 0n);
+  assert.equal(strictThreshold.isSufficient, false);
+
   const uploadPreflight = buildStorageBalanceResult({
     ...baseInput,
     uploadCosts,
@@ -208,4 +215,35 @@ test("toMcpDataset returns JSON-safe dataset and piece CID values", async () => 
   assert.equal(mcpDataset.pieces[0].id, "9");
   assert.equal(mcpDataset.pieces[0].cid, "bafkzcibsample");
   assert.doesNotThrow(() => JSON.stringify(mcpDataset));
+});
+
+test("tool schemas reject fractional numeric inputs and non-integer IDs", async () => {
+  const {
+    CreateDatasetSchema,
+    GetBalancesSchema,
+    UploadFileSchema,
+  } = await import("../src/types/schemas");
+
+  assert.equal(GetBalancesSchema.safeParse({ storageCapacityBytes: 1.5 }).success, false);
+  assert.equal(GetBalancesSchema.safeParse({ persistencePeriodDays: 30.5 }).success, false);
+  assert.equal(GetBalancesSchema.safeParse({ notificationThresholdDays: 0 }).success, false);
+  assert.equal(UploadFileSchema.safeParse({ filePath: "/tmp/file.txt", datasetId: "12.5" }).success, false);
+  assert.equal(CreateDatasetSchema.safeParse({ providerId: "provider-1" }).success, false);
+
+  assert.equal(GetBalancesSchema.safeParse({
+    storageCapacityBytes: 1024,
+    persistencePeriodDays: 365,
+    notificationThresholdDays: 45,
+  }).success, true);
+});
+
+test("toBaseUnits handles decimal and scientific notation without rounding", async () => {
+  const { toBaseUnits } = await import("../src/lib");
+
+  assert.equal(toBaseUnits("1", 18), 1_000_000_000_000_000_000n);
+  assert.equal(toBaseUnits("1e-18", 18), 1n);
+  assert.equal(toBaseUnits(1e-18, 18), 1n);
+  assert.equal(toBaseUnits("123456789012345678.123456789012345678", 18), 123456789012345678123456789012345678n);
+  assert.throws(() => toBaseUnits("0.0000000000000000001", 18), /more than 18 decimal places/);
+  assert.throws(() => toBaseUnits("-1", 18), /non-negative finite/);
 });

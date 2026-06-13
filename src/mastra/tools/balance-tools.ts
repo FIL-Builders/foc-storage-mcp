@@ -17,9 +17,9 @@ export const getBalances = createTool({
     const log = (msg: string) => { progressLog.push(msg); };
 
     try {
-      const storageCapacityBytes = context.storageCapacityBytes || (env.TOTAL_STORAGE_NEEDED_GiB * 1024 * 1024 * 1024);
-      const persistencePeriodDays = context.persistencePeriodDays || env.PERSISTENCE_PERIOD_DAYS;
-      const notificationThresholdDays = context.notificationThresholdDays || env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS;
+      const storageCapacityBytes = context.storageCapacityBytes ?? (env.TOTAL_STORAGE_NEEDED_GiB * 1024 * 1024 * 1024);
+      const persistencePeriodDays = context.persistencePeriodDays ?? env.PERSISTENCE_PERIOD_DAYS;
+      const notificationThresholdDays = context.notificationThresholdDays ?? env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS;
 
       // Log calculation parameters
       const capacityGB = (storageCapacityBytes / (1024 * 1024 * 1024)).toFixed(2);
@@ -31,7 +31,9 @@ export const getBalances = createTool({
       log(`- Notification Threshold: ${notificationThresholdDays} days`);
 
       log("Fetching wallet balances from blockchain...");
-      const checkStorageBalanceResult = await checkStorageBalance(storageCapacityBytes, persistencePeriodDays);
+      const checkStorageBalanceResult = await checkStorageBalance(storageCapacityBytes, persistencePeriodDays, {
+        notificationThresholdDays,
+      });
 
       log("Calculating storage metrics and requirements...");
       const formattedResult = formatStorageBalanceResult(checkStorageBalanceResult);
@@ -49,11 +51,11 @@ export const getBalances = createTool({
 
       // Check for insolvency warning
       const daysLeft = checkStorageBalanceResult.daysLeftAtBurnRate;
-      if (daysLeft < 45) {
+      if (daysLeft < notificationThresholdDays) {
         if (daysLeft < 30) {
           log(`⛔ CRITICAL INSOLVENCY WARNING: Only ${daysLeft.toFixed(1)} days of balance remaining! Storage providers consider accounts with less than 30 days as INSOLVENT and will REFUSE SERVICE. Deposit funds IMMEDIATELY!`);
         } else {
-          log(`⚠️ LOW BALANCE WARNING: Only ${daysLeft.toFixed(1)} days remaining (threshold: 45 days). You are approaching the insolvency threshold (30 days). Please deposit funds soon to avoid service interruption.`);
+          log(`⚠️ LOW BALANCE WARNING: Only ${daysLeft.toFixed(1)} days remaining (threshold: ${notificationThresholdDays} days). You are approaching the insolvency threshold (30 days). Please deposit funds soon to avoid service interruption.`);
         }
       }
 

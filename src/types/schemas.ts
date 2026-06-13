@@ -8,6 +8,11 @@ import { env } from '@/config';
 import { SIZE_CONSTANTS } from '@filoz/synapse-core/utils';
 import type { McpDataset } from './core';
 import { PDPProvider } from '@filoz/synapse-core/sp-registry';
+
+const IntegerIdStringSchema = z.string()
+  .regex(/^\d+$/, "ID must be a non-negative integer string");
+const PositiveIntegerNumberSchema = z.number().int().positive();
+
 // Dataset tools schemas
 export const GetDatasetsSchema = z.object({
   includeAllDatasets: z.boolean().optional().default(true)
@@ -17,14 +22,14 @@ export const GetDatasetsSchema = z.object({
 });
 
 export const GetDatasetSchema = z.object({
-  datasetId: z.string()
+  datasetId: IntegerIdStringSchema
     .describe('Dataset ID to get.'),
 });
 
 export const CreateDatasetSchema = z.object({
   withCDN: z.boolean().optional().default(false)
     .describe('Enable CDN for faster file retrieval. Default: false. Recommended for frequently accessed files'),
-  providerId: z.string().optional()
+  providerId: IntegerIdStringSchema.optional()
     .describe('Specific storage provider ID. If not specified, best provider will be auto-selected'),
   // Metadata for the dataset - allows up to 10 string key-value pairs
   metadata: z.record(z.string(), z.string()).optional()
@@ -45,7 +50,7 @@ export const UploadFileSchema = z.object({
       message: "Metadata can contain at most 4 key-value pairs"
     })
     .describe('Metadata for the file. Supports up to 4 string key-value pairs where both keys and values must be strings'),
-  datasetId: z.string().optional()
+  datasetId: IntegerIdStringSchema.optional()
     .describe('Existing dataset ID to add file to. If not provided, creates new dataset'),
   withCDN: z.boolean().optional()
     .describe('Enable CDN for this file. Default: false. Use for frequently accessed files'),
@@ -55,22 +60,22 @@ export const UploadFileSchema = z.object({
 
 // Balance query schema
 export const GetBalancesSchema = z.object({
-  storageCapacityBytes: z.number().optional().default(env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB))
+  storageCapacityBytes: PositiveIntegerNumberSchema.optional().default(env.TOTAL_STORAGE_NEEDED_GiB * Number(SIZE_CONSTANTS.GiB))
     .describe('Storage capacity in bytes. Default: 1 TB. This is used to calculate the storage needs and the deposit needed.'),
-  persistencePeriodDays: z.number().optional().default(env.PERSISTENCE_PERIOD_DAYS)
+  persistencePeriodDays: PositiveIntegerNumberSchema.optional().default(env.PERSISTENCE_PERIOD_DAYS)
     .describe('Persistence period in days. Default: 365. This is used to calculate the storage needs and the deposit needed.'),
-  notificationThresholdDays: z.number().optional().default(env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS)
-    .describe('Notification threshold in days. Default: 10. This is used check if the user needs to top up their storage balance before the storage balance runs out.'),
+  notificationThresholdDays: PositiveIntegerNumberSchema.optional().default(env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS)
+    .describe('Notification threshold in days. This is used check if the user needs to top up their storage balance before the storage balance runs out.'),
 });
 
 // Payment processing schema
 export const ProcessPaymentSchema = z.object({
-  depositAmount: z.number().optional().default(0)
+  depositAmount: z.number().nonnegative().optional().default(0)
     .describe('Amount to deposit in USDFC. Default: 0. If not provided, the tool will check the balance and deposit the necessary amount.')
 });
 
 export const ProcessWithdrawalSchema = z.object({
-  withdrawalAmount: z.number().optional().default(0)
+  withdrawalAmount: z.number().nonnegative().optional().default(0)
     .describe('Amount to withdraw in USDFC. Default: 0. If not provided, the tool will check the balance and withdraw the necessary amount.')
 });
 

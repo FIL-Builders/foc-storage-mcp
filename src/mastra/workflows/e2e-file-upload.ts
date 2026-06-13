@@ -2,10 +2,12 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
 import { focStorageTools } from "@/mastra/tools";
-import { PaymentResponse, UploadResponse } from "@/types";
-import { validateFilePath } from "@/lib";
+import { UploadResponse } from "@/types";
+import { validateFilePath, serializeBigInt } from "@/lib";
 import { fromBaseUnits } from "@/lib";
 import { env } from "@/config";
+import { checkStorageBalance } from "@/services";
+import { processPaymentService } from "@/services/payment-service";
 
 // ============================================================================
 // E2E FILE UPLOAD WORKFLOW
@@ -19,10 +21,10 @@ import { env } from "@/config";
 
 const e2eFileUploadInputSchema = z.object({
   filePath: z.string().describe("Absolute path to the file to upload"),
-  datasetId: z.string().optional().describe("Existing dataset ID to use"),
+  datasetId: z.string().regex(/^\d+$/, "Dataset ID must be a non-negative integer string").optional().describe("Existing dataset ID to use"),
   withCDN: z.boolean().optional().describe("Enable CDN for faster retrieval").default(false),
-  persistenceDays: z.number().optional().describe("Storage duration in days (default: 180)").default(env.PERSISTENCE_PERIOD_DAYS),
-  notificationThresholdDays: z.number().optional().describe("Notification threshold in days (default: 10)").default(env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS),
+  persistenceDays: z.number().int().positive().optional().describe("Storage duration in days").default(env.PERSISTENCE_PERIOD_DAYS),
+  notificationThresholdDays: z.number().int().positive().optional().describe("Notification threshold in days").default(env.RUNOUT_NOTIFICATION_THRESHOLD_DAYS),
   fileMetadata: z.record(z.string(), z.string()).optional().describe("Metadata for the file (max 4 key-value pairs)"),
 });
 
@@ -34,34 +36,28 @@ const checkBalanceStep = createStep({
   outputSchema: z.object({
     balances: z.any(),
     needsPayment: z.boolean(),
-    depositNeeded: z.number(),
+    depositNeeded: z.string(),
   }),
-  execute: async ({ inputData, runtimeContext }) => {
+  execute: async ({ inputData }) => {
     console.log("📊 STEP 1: Checking balances and storage metrics...");
 
     const fileInfo = await validateFilePath(inputData.filePath);
     const expectedStorageBytes = fileInfo.size;
+    const dataSetId = inputData.datasetId ? BigInt(inputData.datasetId) : undefined;
 
-    const { getBalances } = focStorageTools;
-    const result = await getBalances.execute!({
-      context: { storageCapacityBytes: expectedStorageBytes, persistencePeriodDays: inputData.persistenceDays, notificationThresholdDays: inputData.notificationThresholdDays },
-      runtimeContext,
+    const result = await checkStorageBalance(expectedStorageBytes, inputData.persistenceDays, {
+      notificationThresholdDays: inputData.notificationThresholdDays,
+      upload: {
+        isNewDataSet: dataSetId === undefined,
+        dataSetId,
+        withCDN: inputData.withCDN ?? false,
+      },
     });
 
-    // Check if the result indicates an error
-    if (result.success === false) {
-      throw new Error(`Balance check failed: ${result.error || 'Unknown error'}`);
-    }
-
-    // Validate that we have the expected structure
-    if (!result.checkStorageBalanceResult) {
-      throw new Error(`Balance check returned invalid structure`);
-    }
-
     return {
-      balances: result.checkStorageBalanceResult,
-      needsPayment: !result.checkStorageBalanceResult.isRateSufficient || !result.checkStorageBalanceResult.isLockupSufficient || Number(result.checkStorageBalanceResult.depositNeeded) > 0,
-      depositNeeded: Number(result.checkStorageBalanceResult.depositNeeded) || 0,
+      balances: serializeBigInt(result),
+      needsPayment: !result.isSufficient,
+      depositNeeded: result.depositNeeded.toString(),
     };
   },
 });
@@ -73,7 +69,7 @@ const processPaymentStep = createStep({
   inputSchema: z.object({
     balances: z.any(),
     needsPayment: z.boolean(),
-    depositNeeded: z.number(),
+    depositNeeded: z.string(),
   }),
   outputSchema: z.object({
     skipped: z.boolean(),
@@ -81,7 +77,7 @@ const processPaymentStep = createStep({
     depositAmount: z.string().optional(),
     message: z.string().optional(),
   }),
-  execute: async ({ getStepResult, getInitData, runtimeContext }) => {
+  execute: async ({ getStepResult, getInitData }) => {
     const balanceInfo = getStepResult("checkBalance");
     const initData = getInitData();
     const persistenceDays = initData.persistenceDays || 180;
@@ -97,21 +93,15 @@ const processPaymentStep = createStep({
     }
 
     console.log("💰 STEP 2: Processing payment and/or setting allowances...");
-    if (balanceInfo.depositNeeded > 0) {
-      console.log(`   Deposit needed: ${fromBaseUnits(balanceInfo.depositNeeded, 18)} USDFC`);
+    const depositNeeded = BigInt(balanceInfo.depositNeeded);
+    if (depositNeeded > 0n) {
+      console.log(`   Deposit needed: ${fromBaseUnits(depositNeeded, 18)} USDFC`);
     } else {
       console.log(`   Deposit sufficient, but allowances need to be set`);
     }
     console.log(`   Persistence period: ${persistenceDays} days`);
 
-    const { processPayment } = focStorageTools;
-
-    const result = await processPayment.execute!({
-      context: {
-        depositAmount: Number(balanceInfo.depositNeeded),
-      },
-      runtimeContext,
-    }) as PaymentResponse;
+    const result = await processPaymentService(depositNeeded);
 
     // Check if the result indicates an error
     if (result.success === false || result.error) {
@@ -122,18 +112,12 @@ const processPaymentStep = createStep({
     if (result.txHash) {
       console.log(`   TX Hash: ${result.txHash}`);
     }
-    if (result.depositAmount) {
-      console.log(`   Deposit Amount: ${result.depositAmount}`);
-    }
-    if (result.message) {
-      console.log(`   ${result.message}`);
-    }
 
     return {
       skipped: false,
       txHash: result.txHash ?? undefined,
-      depositAmount: result.depositAmount ?? undefined,
-      message: result.message ?? "Payment processed",
+      depositAmount: fromBaseUnits(depositNeeded, 18),
+      message: "Payment processed",
     };
   },
 });
@@ -220,7 +204,7 @@ const summaryStep = createStep({
     console.log("\n🎉 ============================================");
     console.log("   E2E FILE UPLOAD COMPLETED SUCCESSFULLY");
     console.log("============================================");
-    console.log(`📊 Initial Balance: ${balanceInfo.balances.accountStatusMessage}`);
+    console.log(`📊 Initial Balance Sufficient: ${balanceInfo.balances.isSufficient}`);
 
     if (!paymentInfo.skipped) {
       console.log(`💰 Payment Processed: ${paymentInfo.depositAmount} USDFC`);

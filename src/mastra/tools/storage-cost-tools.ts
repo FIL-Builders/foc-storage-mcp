@@ -23,7 +23,7 @@ const EstimateStorageCostSchema = z.object({
   createCDNDataset: z.boolean()
     .optional()
     .default(false)
-    .describe('Whether this is for a new CDN-enabled dataset (adds 1 USDFC one-time cost). Default: false'),
+    .describe('Whether this is for a new CDN-enabled dataset. Default: false'),
 }).refine(
   (data) => (data.sizeInGiB !== undefined) !== (data.sizeInTiB !== undefined),
   {

@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core";
 import { ProcessPaymentOutputSchema, ProcessPaymentSchema, ProcessWithdrawalOutputSchema, ProcessWithdrawalSchema } from "@/types";
-import { toBaseUnits, getExplorerUrl } from "@/lib";
+import { toBaseUnits, fromBaseUnits, getExplorerUrl } from "@/lib";
+import { checkStorageBalance } from "@/services";
 import { processPaymentService, processWithdrawalService } from "@/services/payment-service";
 
 /**
@@ -20,7 +21,22 @@ export const processPayment = createTool({
     const { depositAmount } = context;
 
     log("Converting amount to base units...");
-    const amount = toBaseUnits(depositAmount.toString(), 18);
+    let amount = toBaseUnits(depositAmount, 18);
+
+    let isApprovalOnly = false;
+    if (amount === 0n) {
+      log("No explicit deposit amount provided, checking current storage funding requirements...");
+      const storageBalance = await checkStorageBalance();
+      amount = storageBalance.depositNeeded;
+      if (amount > 0n) {
+        log(`Calculated deposit needed: ${fromBaseUnits(amount, 18)} USDFC`);
+      } else if (storageBalance.isSufficient) {
+        log("Storage account already has sufficient funds and service approval");
+      } else {
+        isApprovalOnly = true;
+        log("Deposit is sufficient, but service approval still needs to be set");
+      }
+    }
 
     log("Initiating payment transaction...");
     const { success, txHash, error } = await processPaymentService(amount);
@@ -41,7 +57,11 @@ export const processPayment = createTool({
     return {
       success,
       txHash,
-      message: `Payment processed successfully. You deposited ${depositAmount} USDFC to your storage account.`,
+      message: amount > 0n
+        ? `Payment processed successfully. You deposited ${fromBaseUnits(amount, 18)} USDFC to your storage account.`
+        : isApprovalOnly
+          ? "Service approval processed successfully. No additional USDFC deposit was required."
+          : "Storage account funding and service approval are already sufficient.",
       progressLog,
     };
   },
@@ -60,7 +80,23 @@ export const processWithdrawal = createTool({
     const { withdrawalAmount } = context;
 
     log("Converting amount to base units...");
-    const amount = toBaseUnits(withdrawalAmount.toString(), 18);
+    let amount = toBaseUnits(withdrawalAmount, 18);
+
+    if (amount === 0n) {
+      log("No explicit withdrawal amount provided, checking withdrawable storage funds...");
+      const storageBalance = await checkStorageBalance();
+      amount = storageBalance.availableToFreeUp;
+      if (amount === 0n) {
+        log("No withdrawable storage funds available");
+        return {
+          success: true,
+          txHash: null,
+          message: "No withdrawable storage funds are currently available.",
+          progressLog,
+        };
+      }
+      log(`Calculated withdrawable amount: ${fromBaseUnits(amount, 18)} USDFC`);
+    }
 
     log("Initiating withdrawal transaction...");
     const { success, txHash, error } = await processWithdrawalService(amount);
@@ -81,7 +117,7 @@ export const processWithdrawal = createTool({
     return {
       success: true,
       txHash: txHash,
-      message: `Withdrawal processed successfully. You withdrew ${withdrawalAmount} USDFC from your storage account.`,
+      message: `Withdrawal processed successfully. You withdrew ${fromBaseUnits(amount, 18)} USDFC from your storage account.`,
       progressLog,
     };
   },
