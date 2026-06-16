@@ -8,7 +8,7 @@ import { processPaymentService, processWithdrawalService } from "@/services/paym
  * Payment tools for FOC storage operations.
  */
 
-export const processPayment = createTool({
+const processPayment = createTool({
   id: "processPayment",
   description:
     "Deposit USDFC tokens (not in base units) and configure storage service allowances in a single transaction using EIP-2612 gasless permits. Sets both rate allowance (per-epoch spending limit) and lockup allowance (total committed funds) to unlimited for seamless storage operations. Use this to fund your storage account before uploads or when balance is insufficient. Validates wallet balance before processing to prevent failed transactions.",

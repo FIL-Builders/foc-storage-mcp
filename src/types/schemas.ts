@@ -79,79 +79,24 @@ export const ProcessWithdrawalSchema = z.object({
     .describe('Amount to withdraw in USDFC. Must be provided explicitly; omitted amounts do not trigger a transaction.')
 });
 
-// Provider query schema
-export const GetProvidersSchema = z.object({
-  onlyApproved: z.boolean().optional().default(true)
-    .describe('Filter to only approved providers. Default: true'),
-});
-
 /**
  * Output schemas for FOC Storage tool responses
  * Zod validation schemas for tool return values
  */
 
-// Common response schemas
-export const BaseErrorResponseSchema = z.object({
-  success: z.literal(false),
-  error: z.string(),
-  message: z.string(),
-});
-
-// Nested schemas for complex objects
-export const UnifiedSizeInfoSchema = z.object({
-  sizeBytes: z.string(),
-  sizeKiB: z.number(),
-  sizeMiB: z.number(),
-  sizeGiB: z.number(),
-  withCDN: z.boolean().optional(),
-  leafCount: z.number().optional(),
-  pieceCount: z.number().optional(),
-  message: z.string().optional(),
-});
-
-export const DataSetPieceSchema = z.object({
-  pieceCid: z.string(),
-  retrievalUrl: z.string(),
-  sizes: UnifiedSizeInfoSchema,
-  metadata: z.record(z.string(), z.string()),
-});
-
-export const DataSetSchema = z.object({
-  datasetId: z.number(),
-  withCDN: z.boolean(),
-  datasetMetadata: z.record(z.string(), z.string()),
-  totalDatasetSizeMessage: z.string(),
-  dataSetPieces: z.array(DataSetPieceSchema),
-});
-
-export const McpDatasetPieceSchema = z.object({
+const McpDatasetPieceSchema = z.object({
   id: z.string(),
   url: z.string(),
   metadata: z.record(z.unknown()),
   cid: z.string(),
 });
 
-export const McpDatasetSchema = z.object({
+const McpDatasetSchema = z.object({
   pieces: z.array(McpDatasetPieceSchema),
 }).catchall(z.unknown()) as z.ZodType<McpDataset>;
 
-export const StorageBalanceResultSchema = z.object({
-  filBalance: z.bigint(),
-  usdfcBalance: z.bigint(),
-  availableStorageFundsUsdfc: z.bigint(),
-  depositNeeded: z.bigint(),
-  availableToFreeUp: z.bigint(),
-  daysLeftAtMaxBurnRate: z.number(),
-  daysLeftAtBurnRate: z.number(),
-  isRateSufficient: z.boolean(),
-  isLockupSufficient: z.boolean(),
-  isSufficient: z.boolean(),
-  currentStorageMonthlyRate: z.bigint(),
-  maxStorageMonthlyRate: z.bigint(),
-});
-
 // Serialized version with string values for JSON output
-export const StorageBalanceResultSerializedSchema = z.object({
+const StorageBalanceResultSerializedSchema = z.object({
   filBalance: z.string(),
   usdfcBalance: z.string(),
   availableStorageFundsUsdfc: z.string(),
@@ -166,7 +111,7 @@ export const StorageBalanceResultSerializedSchema = z.object({
   maxStorageMonthlyRate: z.string(),
 });
 
-export const FormattedStorageBalanceResultSchema = z.object({
+const FormattedStorageBalanceResultSchema = z.object({
   filBalance: z.string(),
   usdfcBalance: z.string(),
   availableStorageFundsUsdfc: z.string(),

@@ -80,7 +80,7 @@ const processPaymentStep = createStep({
   execute: async ({ getStepResult, getInitData }) => {
     const balanceInfo = getStepResult("checkBalance");
     const initData = getInitData();
-    const persistenceDays = initData.persistenceDays || 180;
+    const persistenceDays = initData.persistenceDays ?? env.PERSISTENCE_PERIOD_DAYS;
 
     // Always process payment/allowances if needed, even if deposit is 0
     // This ensures rate and lockup allowances are properly set

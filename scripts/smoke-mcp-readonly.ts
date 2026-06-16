@@ -28,16 +28,17 @@ function envForChild(): Record<string, string> {
 
 function payloadFromResult(result: ToolCallResult): Record<string, unknown> | undefined {
   if ("structuredContent" in result && result.structuredContent) {
-    return result.structuredContent;
+    return result.structuredContent as Record<string, unknown>;
   }
 
   if ("toolResult" in result && typeof result.toolResult === "object" && result.toolResult !== null) {
     return result.toolResult as Record<string, unknown>;
   }
 
-  if ("content" in result) {
-    const textContent = result.content.find((item) => item.type === "text");
-    if (textContent) {
+  if ("content" in result && Array.isArray(result.content)) {
+    const items = result.content as Array<{ type?: string; text?: string }>;
+    const textContent = items.find((item) => item.type === "text");
+    if (textContent?.text) {
       try {
         const parsed = JSON.parse(textContent.text);
         if (typeof parsed === "object" && parsed !== null) {

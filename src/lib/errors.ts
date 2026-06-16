@@ -9,7 +9,7 @@ import { env } from '@/config';
  * @param isTestnet - Whether the operation is on a testnet
  * @returns Formatted top-up instructions for the user
  */
-export function getTopUpMessage(isTestnet: boolean): string {
+function getTopUpMessage(isTestnet: boolean): string {
     if (isTestnet) {
         return `
 To resolve insufficient balance errors:

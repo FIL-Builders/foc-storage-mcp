@@ -211,7 +211,8 @@ test("toMcpDataset returns JSON-safe dataset and piece CID values", async () => 
 
   assert.equal(mcpDataset.dataSetId, "12");
   assert.equal(mcpDataset.providerId, "7");
-  assert.equal(mcpDataset.metadata.nested.count, "5");
+  const metadata = mcpDataset.metadata as { nested: { count: string } };
+  assert.equal(metadata.nested.count, "5");
   assert.equal(mcpDataset.pieces[0].id, "9");
   assert.equal(mcpDataset.pieces[0].cid, "bafkzcibsample");
   assert.doesNotThrow(() => JSON.stringify(mcpDataset));

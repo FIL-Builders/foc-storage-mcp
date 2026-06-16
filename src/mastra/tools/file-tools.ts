@@ -16,11 +16,12 @@ import {
 import { checkStorageBalance } from "@/services";
 import { processPaymentService } from "@/services/payment-service";
 import { getProvider } from "@/services";
+import { selectHealthyProviders } from "@/services";
 
 /**
  * File tools for FOC storage operations.
  */
-export const uploadFile = createTool({
+const uploadFile = createTool({
   id: "uploadFile",
   description:
     "Upload files to decentralized Filecoin storage with automatic payment handling and progress tracking. Supports both standard storage and CDN-enabled storage for frequently accessed files. The upload process is tracked through 8 phases with detailed progress logging. Prerequisites: Valid file path, PRIVATE_KEY environment variable. Returns pieceCid for retrieval and transaction hash for verification.",
@@ -98,8 +99,25 @@ export const uploadFile = createTool({
       // PHASE 6: Storage service creation
       log("Creating storage service...");
 
+      // For a NEW dataset, pick a reachable provider ourselves and pass it
+      // explicitly so the SDK resolves it directly instead of running
+      // smartSelect, whose 1s ping wrongly rejects healthy-but-slow providers.
+      // For an existing dataset the provider is fixed by the dataset.
+      let providerId: bigint | undefined;
+      if (!isExistingDataset) {
+        const selection = await selectHealthyProviders(1);
+        providerId = selection.providerIds[0];
+        log(
+          `Selected provider ${selection.primaryName} (${selection.reachableCount}/${selection.approvedCount} providers reachable)`,
+        );
+        if (selection.usedUnendorsedPrimary) {
+          log("No endorsed provider reachable; using a reachable approved provider.");
+        }
+      }
+
       const storageService = await synapse.storage.createContext({
         dataSetId,
+        providerId,
         withCDN: context.withCDN || false,
         callbacks: {
           onDataSetResolved: (info) => {

@@ -7,7 +7,7 @@ import { checkStorageBalance, formatStorageBalanceResult, defaultStorageBalanceR
 /**
  * Balance tools for FOC storage operations.
  */
-export const getBalances = createTool({
+const getBalances = createTool({
   id: 'getBalances',
   description: 'Check wallet balances (FIL and USDFC tokens) and comprehensive storage metrics including available funds, required deposits, days of storage remaining, and allowance status. Returns both human-readable formatted values and raw data with progress log showing calculation parameters used. ⚠️ CRITICAL: Storage providers consider accounts with less than 30 days of available balance as INSOLVENT and may refuse service. Default notice period is 45 days to ensure safe margin. IMPORTANT AGENT INSTRUCTIONS: (1) Before calling this tool, ASK the user if they want to calculate based on default storage requirements (150 GiB capacity, 365 days persistence, 45 days notice period) or if they have specific requirements. (2) After showing results, ALWAYS ASK the user if they want to see calculations for different storage configurations. (3) If days remaining falls below 45, WARN the user that they are approaching insolvency threshold (30 days) and should deposit funds immediately. Use this before upload operations to verify sufficient balance, or to monitor storage budget and plan deposits.',
   inputSchema: GetBalancesSchema,

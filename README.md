@@ -6,11 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/node/v/@fil-b/foc-storage-mcp)](https://nodejs.org)
 
-**@fil-b/foc-storage-mcp** provides AI agents with seamless access to Filecoin's decentralized storage network through the Model Context Protocol (MCP). Store files persistently with automatic payment handling, CDN support, and comprehensive dataset management.
+**@fil-b/foc-storage-mcp** lets AI agents store and retrieve files on Filecoin's decentralized network through the Model Context Protocol (MCP), with automatic payment handling, CDN support, and dataset management.
 
 ## Features
 
-- 🛠️ **10 MCP Tools** - Upload, manage, and price storage operations
+- 🛠️ **11 MCP Tools** - Upload, manage, price, and pay for storage operations
 - 📁 **Dataset Organization** - Group related files efficiently
 - 💳 **Automatic Payments** - Built-in USDFC handling with gasless permits
 - ⚡ **CDN Support** - Fast retrieval for frequently accessed files
@@ -30,6 +30,7 @@
 - `TOTAL_STORAGE_NEEDED_GiB` - Default storage capacity for calculations (default: 150 GiB)
 - `PERSISTENCE_PERIOD_DAYS` - Data retention duration (default: 365 days)
 - `RUNOUT_NOTIFICATION_THRESHOLD_DAYS` - Balance warning threshold (default: 45 days, **recommended >30**)
+- `SYNAPSE_SOURCE` - Source tag identifying this client to Synapse (default: `foc-storage-mcp`)
 
 > **Note:** Filecoin warm storage requires 30 days paid upfront. Keep balance above 30 days to maintain service.
 
@@ -195,6 +196,7 @@ Ask naturally in Claude, Cursor, or any MCP client:
 
 - `getBalances` - Check wallet and storage metrics
 - `processPayment` - Deposit USDFC tokens
+- `processWithdrawal` - Withdraw a specified USDFC amount to your wallet
 
 **Providers & Pricing**
 

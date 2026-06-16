@@ -147,7 +147,7 @@ PERSISTENCE PERIOD PLANNING:
 • Balance cost vs duration
 • Longer periods lock more USDFC
 • Consider renewal strategies for critical data
-• Default 180 days suitable for most use cases
+• Default 365 days suitable for most use cases
 
 PROVIDER SELECTION:
 • Auto-selection usually optimal

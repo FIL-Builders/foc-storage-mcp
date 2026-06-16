@@ -13,6 +13,7 @@
     "build:mcp": "tsup && chmod +x dist/stdio.js",
     "prepublishOnly": "npm run build:mcp",
     "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start",
@@ -45,30 +46,21 @@
     "node": ">=20.10.0"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^2.0.57",
     "@filoz/synapse-core": "^0.7.0",
-    "@filoz/synapse-react": "^0.3.0",
     "@filoz/synapse-sdk": "^1.0.1",
     "@mastra/core": "^0.24.0",
     "@mastra/libsql": "^0.16.2",
     "@mastra/loggers": "^0.10.19",
     "@mastra/mcp": "^0.14.2",
-    "@mastra/memory": "^0.15.11",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "ai": "^5.0.82",
-    "axios": "^1.10.0",
-    "axios-retry": "^4.5.0",
+    "@types/node": "^24.0.4",
     "decimal.js": "^10.6.0",
-    "ethers": "^6.13.0",
+    "dotenv": "^17.2.3",
     "mastra": "^0.18.0",
     "tsup": "^8.5.0",
-    "viem": "^2.21.0",
-    "zod": "^3.25.76",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^24.0.4",
-    "dotenv": "^17.2.3",
-    "jest": "^30.0.3",
     "tsx": "^4.19.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "viem": "^2.21.0",
+    "zod": "^3.25.76"
   }
 }

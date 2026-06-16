@@ -19,10 +19,3 @@ export interface UploadResponse extends ToolResponse {
   status?: string;
   progressLog?: string[];
 }
-
-export interface PaymentResponse extends ToolResponse {
-  txHash?: string;
-  depositAmount?: string;
-  rateAllowance?: string;
-  lockupAllowance?: string;
-}

@@ -14,3 +14,6 @@ export * from './storage-service';
 
 // Provider service
 export * from './provider-service';
+
+// Provider health-check selection
+export * from './provider-selection';

@@ -19,6 +19,3 @@ export const focStorageTools = {
   ...providerTools,
   ...storageCostTools,
 };
-
-// Tools array for Mastra Agent
-export const focStorageToolsArray = Object.values(focStorageTools);

@@ -17,7 +17,7 @@ import { estimateDatasetCreationFunding } from "@/services/storage-service";
 /**
  * Dataset tools for FOC storage operations.
  */
-export const getDatasets = createTool({
+const getDatasets = createTool({
   id: "getDatasets",
   description:
     "Retrieve all datasets owned by the connected wallet with comprehensive information including piece CIDs, file sizes, provider details, and retrieval URLs. Filter by CDN status or view all datasets. Each dataset contains complete metadata about stored files and their blockchain storage proofs. Use this to inventory files, check storage status, or locate specific uploads.",
@@ -57,7 +57,7 @@ export const getDatasets = createTool({
   },
 });
 
-export const getDataset = createTool({
+const getDataset = createTool({
   id: "getDataset",
   description:
     "Retrieve detailed information about a specific dataset by its ID, including all pieces (files), their CIDs, sizes, retrieval URLs, and metadata. Returns the same comprehensive data structure as getDatasets but for a single dataset. Use this when you know the dataset ID and need detailed information about its contents.",
@@ -81,7 +81,7 @@ export const getDataset = createTool({
   },
 });
 
-export const createDataset = createTool({
+const createDataset = createTool({
   id: "createDataset",
   description:
     "Create a new dataset container on Filecoin for organizing related files with consistent storage settings. Datasets define storage parameters (CDN enabled/disabled, provider selection) that apply to all files added to them. Creating datasets upfront allows for better file organization and consistent retrieval performance. Provider ID is required - use getProviders to list available providers. Required Synapse v1 create-dataset fees, lockups, deposits, and service approval are estimated from the live price list before creation. Returns dataset ID, transaction hash, and progress tracking through validation, funding, and creation steps.",

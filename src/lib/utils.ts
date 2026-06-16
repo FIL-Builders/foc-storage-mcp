@@ -99,15 +99,3 @@ export function getExplorerUrl(txHash: string): string {
 
     return `${baseUrl}/${txHash}`;
 }
-
-/**
- * Formats transaction hash with explorer link for console logging
- * @param txHash - Transaction hash
- * @returns Formatted string with hash and explorer link
- */
-export function formatTxWithExplorer(txHash: string | null): string {
-    if (!txHash) return 'No transaction hash available';
-
-    const explorerUrl = getExplorerUrl(txHash);
-    return `Transaction: ${txHash}\nView on explorer: ${explorerUrl}`;
-}

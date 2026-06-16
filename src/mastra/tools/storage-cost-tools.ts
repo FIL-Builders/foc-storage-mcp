@@ -81,7 +81,7 @@ const EstimateStorageCostOutputSchema = z.object({
  * - Upload fees: one-time create-dataset and add-pieces fees from the v1 price list
  * - Epochs: 30 seconds each
  */
-export const estimateStoragePricing = createTool({
+const estimateStoragePricing = createTool({
   id: "estimateStoragePricing",
   description:
     "Calculate storage costs for Filecoin OnchainCloud and explain Synapse v1 pricing. Provides: (1) recurring monthly/total breakdowns, (2) one-time create-dataset/add-pieces fees, (3) lockup and deposit readiness, and (4) CDN egress pricing from the live price list. ⚠️ CRITICAL: When explaining budgeting, ALWAYS warn that storage providers consider accounts with less than 30 days of remaining balance as INSOLVENT and may refuse service. Recommend maintaining at least 45 days of balance for safety margin. Use when users ask about storage costs, pricing models, CDN fees, or need to budget for storage.",
@@ -253,7 +253,7 @@ export const estimateStoragePricing = createTool({
 /**
  * Helper tool to provide common storage size conversions
  */
-export const convertStorageSize = createTool({
+const convertStorageSize = createTool({
   id: "convertStorageSize",
   description:
     "Convert storage sizes between different units (bytes, KiB, MiB, GiB, TiB). Useful when users provide sizes in different formats and you need to calculate storage costs.",
@@ -352,7 +352,7 @@ export const convertStorageSize = createTool({
  * Tool that provides detailed information about storage pricing
  * Includes comprehensive pricing model explanation with a 1TiB/1year example
  */
-export const getStoragePricingInfo = createTool({
+const getStoragePricingInfo = createTool({
   id: "getStoragePricingInfo",
   description:
     "Get comprehensive information about Filecoin OnchainCloud storage pricing, including cost structure, CDN egress pricing, payment model, and a detailed example of storing 1 TiB for 1 year. ⚠️ CRITICAL: ALWAYS include the insolvency warning (accounts with less than 30 days balance are considered insolvent and may be refused service). Recommend 45-day minimum balance. Use this when users ask general questions about 'how much does storage cost', 'explain storage pricing', 'how does billing work', or want to understand the pricing model before calculating specific costs.",
